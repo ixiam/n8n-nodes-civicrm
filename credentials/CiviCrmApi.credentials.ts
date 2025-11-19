@@ -39,43 +39,17 @@ export class CiviCrmApi {
 		},
 	};
 
-	async test(
-	this: ICredentialTestFunctions,
-	credentials: ICredentialsDecrypted<ICredentialDataDecryptedObject>,
-) {
-	const data = credentials.data as { baseUrl: string; apiToken: string };
-
-	const baseUrl = data.baseUrl.replace(/\/$/, '');
-	const token = data.apiToken;
-
-	try {
-		const response = await this.helpers.request({
-			method: 'POST',
-			url: `${baseUrl}/civicrm/ajax/api4/Contact/get`,
-			json: true,
-			body: { limit: 1 },
-			headers: {
-				'X-Civi-Auth': `Bearer ${token}`,
-				'Content-Type': 'application/json',
-			},
-		});
-
-		if (response?.values !== undefined) {
-			return {
-				status: 'OK',
-				message: 'Connection successful.',
-			};
-		}
-
-		return {
-			status: 'Error',
-			message: 'Unexpected API response.',
-		};
-	} catch (error: any) {
-		return {
-			status: 'Error',
-			message: error.message,
-		};
-	}
-}
+test = {
+	httpRequest: {
+		method: 'POST',
+		url: '={{ $credentials.baseUrl.replace(/\\/$/, "") }}/civicrm/ajax/api4/Contact/get',
+		headers: {
+			'X-Civi-Auth': '={{ "Bearer " + $credentials.apiToken }}',
+			'Content-Type': 'application/json',
+		},
+		body: {
+			limit: 1,
+		},
+	},
+};
 }
