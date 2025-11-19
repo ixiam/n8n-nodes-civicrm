@@ -1,0 +1,61 @@
+{
+  "name": "n8n-nodes-civicrm",
+  "version": "1.0.0",
+  "description": "Full-featured CiviCRM API v4 integration for n8n with support for Contacts, Memberships, Groups, Relationships, Activities and structured sub-entities like Email, Phone, and Address.",
+  "license": "MIT",
+  "keywords": [
+    "n8n-community-node-package",
+    "civicrm",
+    "api4",
+    "crm",
+    "automation"
+  ],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "dev": "n8n-node dev",
+    "build": "n8n-node build",
+    "lint": "n8n-node lint",
+    "release": "n8n-node release"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ixiam/n8n-nodes-civicrm.git"
+  },
+  "homepage": "https://ixiam.com",
+  "bugs": {
+    "url": "https://github.com/ixiam/n8n-nodes-civicrm/issues"
+  },
+  "author": "Ixiam / Julian Reartes",
+  "engines": {
+    "node": ">=18"
+  },
+  "n8n": {
+    "nodes": [
+      "dist/nodes/CiviCrm/CiviCrm.node.js"
+    ],
+    "credentials": [
+      "dist/credentials/CiviCrmApi.credentials.js"
+    ]
+  },
+  "devDependencies": {
+    "@n8n/node-cli": "^0.21.0",
+    "@types/node": "^20.11.30",
+    "@typescript-eslint/eslint-plugin": "6.21.0",
+    "@typescript-eslint/parser": "6.21.0",
+    "eslint": "8.57.0",
+    "eslint-plugin-n8n-nodes-base": "^1.25.0",
+    "n8n-core": "^1.0.0",
+    "n8n-workflow": "^1.0.0",
+    "typescript": "5.3.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "eslint": "8.57.0",
+      "@typescript-eslint/parser": "6.21.0",
+      "@typescript-eslint/eslint-plugin": "6.21.0",
+      "change-case": "4.1.2"
+    }
+  },
+  "packageManager": "pnpm@10.18.2+sha512.9fb969fa749b3ade6035e0f109f0b8a60b5d08a1a87fdf72e337da90dcc93336e2280ca4e44f2358a649b83c17959e9993e777c2080879f3801e6f0d999ad3dd"
+}
