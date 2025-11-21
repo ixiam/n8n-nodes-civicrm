@@ -11,6 +11,12 @@ This package provides integration between **n8n** and **CiviCRM API v4**, suppor
 Custom fields are **not** supported.
 
 ---
+# About CiviCRM
+
+CiviCRM is an open-source Constituent Relationship Management platform designed for nonprofits, NGOs, and advocacy organizations. It supports contact management, memberships, contributions, event registration, email marketing, case management, and reporting. CiviCRM integrates with WordPress, Drupal, and Joomla.
+
+Download: https://civicrm.org/download
+
 
 ## Installation
 
