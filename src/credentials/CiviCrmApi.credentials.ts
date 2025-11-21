@@ -28,10 +28,10 @@ export class CiviCrmApi implements ICredentialType {
 		},
 	];
 
-	// ← ESTA ES LA PARTE CRÍTICA
 	authenticate = {
 		type: 'generic' as const,
 		properties: {
+			baseURL: '={{ $credentials.baseUrl.replace(/\\/$/, "") }}',
 			headers: {
 				'X-Civi-Auth': '={{ "Bearer " + $credentials.apiToken }}',
 			},
@@ -43,10 +43,6 @@ export class CiviCrmApi implements ICredentialType {
 			baseURL: '={{ $credentials.baseUrl.replace(/\\/$/, "") }}',
 			url: '/civicrm/ajax/api4/Contact/get',
 			method: 'POST',
-			headers: {
-				'X-Civi-Auth': '={{ "Bearer " + $credentials.apiToken }}',
-				'Content-Type': 'application/json',
-			},
 			body: { 
 				limit: 1,
 				select: ['id']
