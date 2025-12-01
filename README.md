@@ -14,7 +14,7 @@ This node enables full integration between **n8n** and **CiviCRM API v4**, suppo
 ## About CiviCRM
 
 <p align="center">
-  <img src="https://upload.wikimedia.org/wikipedia/commons/4/44/Civicrm_logo.png" alt="CiviCRM Logo" width="200"/>
+  <img src="https://civicrm.org/sites/civicrm.org/files/CiviCRM-logo-2019-F2-200px.png" alt="CiviCRM Logo" width="200"/>
 </p>
 
 CiviCRM is an open-source Constituent Relationship Management platform designed for nonprofits, NGOs, and advocacy organizations. It supports contact management, memberships, contributions, event registration, email marketing, case management, and reporting. CiviCRM integrates with WordPress, Drupal, and Joomla.
