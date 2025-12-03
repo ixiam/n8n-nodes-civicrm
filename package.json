@@ -1,6 +1,6 @@
 {
   "name": "@ixiam/n8n-nodes-civicrm",
-  "version": "1.1.23",
+  "version": "1.1.26",
   "description": "Full-featured CiviCRM API v4 integration for n8n with support for Contacts, Memberships, Groups, Relationships, Activities and structured sub-entities like Email, Phone, and Address.",
   "license": "MIT",
   "keywords": [
@@ -49,6 +49,7 @@
     "eslint-plugin-n8n-nodes-base": "1.16.4",
     "n8n-core": "^1.0.0",
     "n8n-workflow": "^1.0.0",
+    "release-it": "^19.0.6",
     "typescript": "^5.0.0"
   },
   "pnpm": {
@@ -59,5 +60,5 @@
       "change-case": "4.1.2"
     }
   },
-  "packageManager": "pnpm@10.18.2+sha512.9fb969fa749b3ade6035e0f109f0b8a60b5d08a1a87fdf72e337da90dcc93336e2280ca4e44f2358a649b83c17959e9993e777c2080879f3801e6f0d999ad3dd"
+  "packageManager": "pnpm@10.24.0+sha512.01ff8ae71b4419903b65c60fb2dc9d34cf8bb6e06d03bde112ef38f7a34d6904c424ba66bea5cdcf12890230bf39f9580473140ed9c946fef328b6e5238a345a"
 }

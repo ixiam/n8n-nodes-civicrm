@@ -143,7 +143,44 @@ class CiviCrm {
                     type: 'number',
                     default: 0,
                     required: true,
-                    displayOptions: { show: { operation: ['get', 'update', 'delete'] } },
+                    displayOptions: {
+                        show: {
+                            operation: ['get', 'update', 'delete'],
+                            resource: ['contact', 'membership', 'group', 'relationship', 'activity'],
+                        },
+                    },
+                },
+                //
+                // CUSTOM API CALL
+                //
+                {
+                    displayName: 'Entity',
+                    name: 'customEntity',
+                    type: 'string',
+                    default: 'Contact',
+                    required: true,
+                    description: 'CiviCRM API4 entity, for example Contact, Membership, Group, Activity, CustomValue, etc.',
+                    displayOptions: { show: { resource: ['customApi'] } },
+                },
+                {
+                    displayName: 'Action',
+                    name: 'customAction',
+                    type: 'string',
+                    default: 'get',
+                    required: true,
+                    description: 'CiviCRM API4 action, for example get, getFields, create, update, delete, getOne, etc.',
+                    displayOptions: { show: { resource: ['customApi'] } },
+                },
+                {
+                    displayName: 'Params (JSON)',
+                    name: 'customParamsJson',
+                    type: 'string',
+                    typeOptions: {
+                        rows: 4,
+                    },
+                    default: '{\n  "limit": 25\n}',
+                    description: 'Raw API4 params JSON passed as-is to CiviCRM. It must be a valid JSON object (no trailing commas).',
+                    displayOptions: { show: { resource: ['customApi'] } },
                 },
                 //
                 // DYNAMIC FIELDS
@@ -187,6 +224,25 @@ class CiviCrm {
         const out = [];
         const resource = this.getNodeParameter('resource', 0);
         const operation = this.getNodeParameter('operation', 0);
+        // Custom API call: generic passthrough to any API4 entity/action
+        if (resource === 'customApi') {
+            const entity = this.getNodeParameter('customEntity', 0);
+            const action = this.getNodeParameter('customAction', 0);
+            const paramsJson = this.getNodeParameter('customParamsJson', 0, '');
+            let params = {};
+            if (paramsJson) {
+                try {
+                    params = JSON.parse(paramsJson);
+                }
+                catch (error) {
+                    throw new Error('Invalid JSON in "Params (JSON)"');
+                }
+            }
+            const res = await GenericFunctions_1.civicrmApiRequest.call(this, 'POST', `/civicrm/ajax/api4/${entity}/${action}`, params);
+            // Return the raw API4 response so advanced users can work with values and metadata
+            out.push({ json: res });
+            return [out];
+        }
         const entity = ENTITY_MAP[resource];
         for (let i = 0; i < items.length; i++) {
             const emailLocationParam = this.getNodeParameter('emailLocation', i, 'Work');

@@ -21,11 +21,12 @@ type Resource =
 	| 'membership'
 	| 'group'
 	| 'relationship'
-	| 'activity';
+	| 'activity'
+	| 'customApi';
 
 type Operation = 'get' | 'getMany' | 'create' | 'update' | 'delete';
 
-const ENTITY_MAP: Record<Resource, string> = {
+const ENTITY_MAP: Record<Exclude<Resource, 'customApi'>, string> = {
 	contact: 'Contact',
 	membership: 'Membership',
 	group: 'Group',
@@ -176,7 +177,48 @@ export class CiviCrm implements INodeType {
 				type: 'number',
 				default: 0,
 				required: true,
-				displayOptions: { show: { operation: ['get', 'update', 'delete'] } },
+				displayOptions: {
+					show: {
+						operation: ['get', 'update', 'delete'],
+						resource: ['contact', 'membership', 'group', 'relationship', 'activity'],
+					},
+				},
+			},
+
+			//
+			// CUSTOM API CALL
+			//
+			{
+				displayName: 'Entity',
+				name: 'customEntity',
+				type: 'string',
+				default: 'Contact',
+				required: true,
+				description:
+					'CiviCRM API4 entity, for example Contact, Membership, Group, Activity, CustomValue, etc.',
+				displayOptions: { show: { resource: ['customApi'] } },
+			},
+			{
+				displayName: 'Action',
+				name: 'customAction',
+				type: 'string',
+				default: 'get',
+				required: true,
+				description:
+					'CiviCRM API4 action, for example get, getFields, create, update, delete, getOne, etc.',
+				displayOptions: { show: { resource: ['customApi'] } },
+			},
+			{
+				displayName: 'Params (JSON)',
+				name: 'customParamsJson',
+				type: 'string',
+				typeOptions: {
+					rows: 4,
+				},
+				default: '{\n  "limit": 25\n}',
+				description:
+					'Raw API4 params JSON passed as-is to CiviCRM. It must be a valid JSON object (no trailing commas).',
+				displayOptions: { show: { resource: ['customApi'] } },
 			},
 
 			//
@@ -230,6 +272,34 @@ export class CiviCrm implements INodeType {
 
 		const resource = this.getNodeParameter('resource', 0) as Resource;
 		const operation = this.getNodeParameter('operation', 0) as Operation;
+
+		// Custom API call: generic passthrough to any API4 entity/action
+		if (resource === 'customApi') {
+			const entity = this.getNodeParameter('customEntity', 0) as string;
+			const action = this.getNodeParameter('customAction', 0) as string;
+			const paramsJson = this.getNodeParameter('customParamsJson', 0, '') as string;
+
+			let params: Record<string, unknown> = {};
+			if (paramsJson) {
+				try {
+					params = JSON.parse(paramsJson);
+				} catch (error) {
+					throw new Error('Invalid JSON in "Params (JSON)"');
+				}
+			}
+
+			const res = await civicrmApiRequest.call(
+				this,
+				'POST',
+				`/civicrm/ajax/api4/${entity}/${action}`,
+				params,
+			);
+
+			// Return the raw API4 response so advanced users can work with values and metadata
+			out.push({ json: res as IDataObject });
+			return [out];
+		}
+
 		const entity = ENTITY_MAP[resource];
 
 		for (let i = 0; i < items.length; i++) {

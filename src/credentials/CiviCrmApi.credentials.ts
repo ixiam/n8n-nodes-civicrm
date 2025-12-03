@@ -39,12 +39,8 @@ export class CiviCrmApi implements ICredentialType {
 
 	test: ICredentialTestRequest = {
 		request: {
-			url: '={{ $credentials.baseUrl }}/civicrm/ajax/api4/Contact/get',
-			method: 'POST',
-			body: {
-				limit: 1,
-				select: ['id']
-			},
+			baseURL: '={{ $credentials.baseUrl }}',
+			url: '',
 		},
 	};
 }
