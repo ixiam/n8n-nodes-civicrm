@@ -31,7 +31,6 @@ export class CiviCrmApi implements ICredentialType {
 	authenticate = {
 		type: 'generic' as const,
 		properties: {
-			baseURL: '={{ $credentials.baseUrl.replace(/\\/$/, "") }}',
 			headers: {
 				'X-Civi-Auth': '={{ "Bearer " + $credentials.apiToken }}',
 			},
@@ -40,10 +39,9 @@ export class CiviCrmApi implements ICredentialType {
 
 	test: ICredentialTestRequest = {
 		request: {
-			baseURL: '={{ $credentials.baseUrl.replace(/\\/$/, "") }}',
-			url: '/civicrm/ajax/api4/Contact/get',
+			url: '={{ $credentials.baseUrl }}/civicrm/ajax/api4/Contact/get',
 			method: 'POST',
-			body: { 
+			body: {
 				limit: 1,
 				select: ['id']
 			},

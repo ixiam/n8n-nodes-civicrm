@@ -251,29 +251,29 @@ export class CiviCrm implements INodeType {
 				const params =
 					resource === 'contact'
 						? {
-								where: [['id', '=', id]],
-								limit: 1,
-								select: [
-									'id',
-									'display_name',
-									'first_name',
-									'last_name',
-									'contact_type',
-									'gender_id',
-									'gender_id:name',
-									'birth_date',
-								],
-								chain: {
-									emails: ['Email', 'get', { where: [['contact_id', '=', '$id']] }],
-									phones: ['Phone', 'get', { where: [['contact_id', '=', '$id']] }],
-									addresses: ['Address', 'get', { where: [['contact_id', '=', '$id']] }],
-								},
-						  }
+							where: [['id', '=', id]],
+							limit: 1,
+							select: [
+								'id',
+								'display_name',
+								'first_name',
+								'last_name',
+								'contact_type',
+								'gender_id',
+								'gender_id:name',
+								'birth_date',
+							],
+							chain: {
+								emails: ['Email', 'get', { where: [['contact_id', '=', '$id']] }],
+								phones: ['Phone', 'get', { where: [['contact_id', '=', '$id']] }],
+								addresses: ['Address', 'get', { where: [['contact_id', '=', '$id']] }],
+							},
+						}
 						: {
-								where: [['id', '=', id]],
-								limit: 1,
-								select: ['id', 'name', 'title', 'subject', 'display_name'],
-						  };
+							where: [['id', '=', id]],
+							limit: 1,
+							select: ['id', 'name', 'title', 'subject', 'display_name'],
+						};
 
 				const res = await civicrmApiRequest.call(
 					this,
@@ -298,7 +298,7 @@ export class CiviCrm implements INodeType {
 				if (whereJson) {
 					try {
 						where = JSON.parse(whereJson);
-					} catch {
+					} catch (error) {
 						throw new Error('Invalid JSON in whereJson');
 					}
 				}
@@ -311,33 +311,34 @@ export class CiviCrm implements INodeType {
 				const params =
 					resource === 'contact'
 						? {
-								where,
-								select: [
-									'id',
-									'display_name',
-									'first_name',
-									'last_name',
-									'contact_type',
-									'gender_id',
-									'gender_id:name',
-									'birth_date',
-								],
-								chain: {
-									emails: ['Email', 'get', { where: [['contact_id', '=', '$id']] }],
-									phones: ['Phone', 'get', { where: [['contact_id', '=', '$id']] }],
-									addresses: ['Address', 'get', { where: [['contact_id', '=', '$id']] }],
-								},
-						  }
+							where,
+							select: [
+								'id',
+								'display_name',
+								'first_name',
+								'last_name',
+								'contact_type',
+								'gender_id',
+								'gender_id:name',
+								'birth_date',
+							],
+							chain: {
+								emails: ['Email', 'get', { where: [['contact_id', '=', '$id']] }],
+								phones: ['Phone', 'get', { where: [['contact_id', '=', '$id']] }],
+								addresses: ['Address', 'get', { where: [['contact_id', '=', '$id']] }],
+							},
+						}
 						: {
-								where,
-								select: ['id', 'name', 'title', 'subject', 'display_name'],
-						  };
+							where,
+							select: ['id', 'name', 'title', 'subject', 'display_name'],
+						};
 
 				if (returnAll) {
 					let offset = 0;
 					const page = 500;
+					let hasMore = true;
 
-					while (true) {
+					while (hasMore) {
 						const r = await civicrmApiRequest.call(
 							this,
 							'POST',
@@ -348,8 +349,11 @@ export class CiviCrm implements INodeType {
 						const vals = r?.values ?? [];
 						for (const v of vals) out.push({ json: v });
 
-						if (vals.length < page) break;
-						offset += page;
+						if (vals.length < page) {
+							hasMore = false;
+						} else {
+							offset += page;
+						}
 					}
 				} else {
 					const r = await civicrmApiRequest.call(
@@ -409,28 +413,6 @@ export class CiviCrm implements INodeType {
 			const emailData: Record<string, unknown> = {};
 			const phoneData: Record<string, unknown> = {};
 			const addressData: Record<string, unknown> = {};
-
-			function normalizeBirthDate(input: string): string {
-				if (!input) return input;
-				let v = input.trim();
-
-				if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
-				} else if (/^\d{2}\/\d{2}\/\d{4}$/.test(v)) {
-					const [d, m, y] = v.split('/');
-					v = `${y}-${m}-${d}`;
-				} else if (/^\d{2}-\d{2}-\d{4}$/.test(v)) {
-					const [d, m, y] = v.split('-');
-					v = `${y}-${m}-${d}`;
-				} else if (/^\d{4}\/\d{2}\/\d{2}$/.test(v)) {
-					v = v.replace(/\//g, '-');
-				} else if (/^\d{4}\.\d{2}\.\d{2}$/.test(v)) {
-					v = v.replace(/\./g, '-');
-				}
-
-				const dt = new Date(v);
-				if (isNaN(dt.getTime())) throw new Error(`Invalid birth_date: ${input}`);
-				return v;
-			}
 
 			let locationTypeMap: Record<string, string> = {};
 			if (resource === 'contact') {
@@ -627,12 +609,12 @@ export class CiviCrm implements INodeType {
 					],
 					...(resource === 'contact'
 						? {
-								chain: {
-									emails: ['Email', 'get', { where: [['contact_id', '=', '$id']] }],
-									phones: ['Phone', 'get', { where: [['contact_id', '=', '$id']] }],
-									addresses: ['Address', 'get', { where: [['contact_id', '=', '$id']] }],
-								},
-						  }
+							chain: {
+								emails: ['Email', 'get', { where: [['contact_id', '=', '$id']] }],
+								phones: ['Phone', 'get', { where: [['contact_id', '=', '$id']] }],
+								addresses: ['Address', 'get', { where: [['contact_id', '=', '$id']] }],
+							},
+						}
 						: {}),
 				},
 			);
@@ -657,8 +639,33 @@ function convertValue(val: string): unknown {
 	try {
 		const j = JSON.parse(t);
 		if (typeof j === 'object') return j;
-	} catch {}
+	} catch (error) {
+		// Not valid JSON, return original value
+	}
 	return val;
+}
+
+function normalizeBirthDate(input: string): string {
+	if (!input) return input;
+	let v = input.trim();
+
+	if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+		// Already in correct format
+	} else if (/^\d{2}\/\d{2}\/\d{4}$/.test(v)) {
+		const [d, m, y] = v.split('/');
+		v = `${y}-${m}-${d}`;
+	} else if (/^\d{2}-\d{2}-\d{4}$/.test(v)) {
+		const [d, m, y] = v.split('-');
+		v = `${y}-${m}-${d}`;
+	} else if (/^\d{4}\/\d{2}\/\d{2}$/.test(v)) {
+		v = v.replace(/\//g, '-');
+	} else if (/^\d{4}\.\d{2}\.\d{2}$/.test(v)) {
+		v = v.replace(/\./g, '-');
+	}
+
+	const dt = new Date(v);
+	if (isNaN(dt.getTime())) throw new Error(`Invalid birth_date: ${input}`);
+	return v;
 }
 
 export default CiviCrm;
