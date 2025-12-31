@@ -1,6 +1,6 @@
 {
-  "name": "n8n-nodes-civicrm",
-  "version": "1.0.0",
+  "name": "@ixiam/n8n-nodes-civicrm",
+  "version": "1.1.27",
   "description": "Full-featured CiviCRM API v4 integration for n8n with support for Contacts, Memberships, Groups, Relationships, Activities and structured sub-entities like Email, Phone, and Address.",
   "license": "MIT",
   "keywords": [
@@ -14,23 +14,27 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "dev": "n8n-node dev",
-    "build": "n8n-node build",
+    "build": "n8n-node build && pnpm run copy:assets",
+    "copy:assets": "cp src/nodes/CiviCrm/civicrm.svg dist/nodes/CiviCrm/",
     "lint": "n8n-node lint",
-    "release": "n8n-node release"
+    "release": "n8n-node release",
+    "test": "npm run build"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ixiam/n8n-nodes-civicrm.git"
+    "url": "git+https://github.com/ixiam/n8n-nodes-civicrm.git"
   },
-  "homepage": "https://ixiam.com",
+  "homepage": "https://www.ixiam.com",
   "bugs": {
     "url": "https://github.com/ixiam/n8n-nodes-civicrm/issues"
   },
-  "author": "Ixiam / Julian Reartes",
+  "author": "Julian Reartes <j.reartes@ixiam.com>",
   "engines": {
     "node": ">=18"
   },
   "n8n": {
+    "n8nNodesApiVersion": 1,
+    "strict": true,
     "nodes": [
       "dist/nodes/CiviCrm/CiviCrm.node.js"
     ],
@@ -39,23 +43,19 @@
     ]
   },
   "devDependencies": {
-    "@n8n/node-cli": "^0.21.0",
+    "@n8n/node-cli": "^0.17.0",
     "@types/node": "^20.11.30",
-    "@typescript-eslint/eslint-plugin": "6.21.0",
-    "@typescript-eslint/parser": "6.21.0",
-    "eslint": "8.57.0",
-    "eslint-plugin-n8n-nodes-base": "^1.25.0",
-    "n8n-core": "^1.0.0",
-    "n8n-workflow": "^1.0.0",
-    "typescript": "5.3.3"
+    "eslint": "9.32.0",
+    "prettier": "3.6.2",
+    "release-it": "^19.0.6",
+    "typescript": "5.9.2"
   },
-  "pnpm": {
-    "overrides": {
-      "eslint": "8.57.0",
-      "@typescript-eslint/parser": "6.21.0",
-      "@typescript-eslint/eslint-plugin": "6.21.0",
-      "change-case": "4.1.2"
-    }
+  "peerDependencies": {
+    "n8n-workflow": "*"
   },
-  "packageManager": "pnpm@10.18.2+sha512.9fb969fa749b3ade6035e0f109f0b8a60b5d08a1a87fdf72e337da90dcc93336e2280ca4e44f2358a649b83c17959e9993e777c2080879f3801e6f0d999ad3dd"
+  "overrides": {
+    "eslint": "9.32.0",
+    "change-case": "4.1.2"
+  },
+  "packageManager": "pnpm@10.24.0+sha512.01ff8ae71b4419903b65c60fb2dc9d34cf8bb6e06d03bde112ef38f7a34d6904c424ba66bea5cdcf12890230bf39f9580473140ed9c946fef328b6e5238a345a"
 }

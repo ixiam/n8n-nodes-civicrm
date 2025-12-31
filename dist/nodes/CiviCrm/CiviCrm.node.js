@@ -29,7 +29,7 @@ async function getLocationTypeMap() {
         limit: 0,
     });
     const map = {};
-    const values = (res?.values || []);
+    const values = ((res === null || res === void 0 ? void 0 : res.values) || []);
     for (const v of values) {
         const name = v.name || '';
         const label = v.label || '';
@@ -143,7 +143,44 @@ class CiviCrm {
                     type: 'number',
                     default: 0,
                     required: true,
-                    displayOptions: { show: { operation: ['get', 'update', 'delete'] } },
+                    displayOptions: {
+                        show: {
+                            operation: ['get', 'update', 'delete'],
+                            resource: ['contact', 'membership', 'group', 'relationship', 'activity'],
+                        },
+                    },
+                },
+                //
+                // CUSTOM API CALL
+                //
+                {
+                    displayName: 'Entity',
+                    name: 'customEntity',
+                    type: 'string',
+                    default: 'Contact',
+                    required: true,
+                    description: 'CiviCRM API4 entity, for example Contact, Membership, Group, Activity, CustomValue, etc.',
+                    displayOptions: { show: { resource: ['customApi'] } },
+                },
+                {
+                    displayName: 'Action',
+                    name: 'customAction',
+                    type: 'string',
+                    default: 'get',
+                    required: true,
+                    description: 'CiviCRM API4 action, for example get, getFields, create, update, delete, getOne, etc.',
+                    displayOptions: { show: { resource: ['customApi'] } },
+                },
+                {
+                    displayName: 'Params (JSON)',
+                    name: 'customParamsJson',
+                    type: 'string',
+                    typeOptions: {
+                        rows: 4,
+                    },
+                    default: '{\n  "limit": 25\n}',
+                    description: 'Raw API4 params JSON passed as-is to CiviCRM. It must be a valid JSON object (no trailing commas).',
+                    displayOptions: { show: { resource: ['customApi'] } },
                 },
                 //
                 // DYNAMIC FIELDS
@@ -158,18 +195,18 @@ class CiviCrm {
         this.methods = {
             loadOptions: {
                 async loadOptionValues() {
-                    const { baseUrl, apiToken } = (await this.getCredentials('civiCrmApi'));
+                    const { url, apiKey } = (await this.getCredentials('civiCrmApi'));
                     const res = await this.helpers.httpRequest({
                         method: 'POST',
-                        url: `${baseUrl.replace(/\/$/, '')}/civicrm/ajax/api4/OptionValue/get`,
+                        url: `${url.replace(/\/$/, '')}/civicrm/ajax/api4/OptionValue/get`,
                         headers: {
-                            'X-Civi-Auth': `Bearer ${apiToken}`,
+                            Authorization: `Bearer ${apiKey}`,
                             'Content-Type': 'application/x-www-form-urlencoded',
                         },
                         body: { params: JSON.stringify({ limit: 50, select: ['id', 'label'] }) },
                         json: true,
                     });
-                    const values = (res?.values || []);
+                    const values = ((res === null || res === void 0 ? void 0 : res.values) || []);
                     return values.map((v) => ({
                         name: v.label,
                         value: v.id,
@@ -182,10 +219,30 @@ class CiviCrm {
        EXECUTE
     ============================================================================ */
     async execute() {
+        var _a, _b, _c, _d, _e, _f, _g, _h;
         const items = this.getInputData();
         const out = [];
         const resource = this.getNodeParameter('resource', 0);
         const operation = this.getNodeParameter('operation', 0);
+        // Custom API call: generic passthrough to any API4 entity/action
+        if (resource === 'customApi') {
+            const entity = this.getNodeParameter('customEntity', 0);
+            const action = this.getNodeParameter('customAction', 0);
+            const paramsJson = this.getNodeParameter('customParamsJson', 0, '');
+            let params = {};
+            if (paramsJson) {
+                try {
+                    params = JSON.parse(paramsJson);
+                }
+                catch (error) {
+                    throw new Error('Invalid JSON in "Params (JSON)"');
+                }
+            }
+            const res = await GenericFunctions_1.civicrmApiRequest.call(this, 'POST', `/civicrm/ajax/api4/${entity}/${action}`, params);
+            // Return the raw API4 response so advanced users can work with values and metadata
+            out.push({ json: res });
+            return [out];
+        }
         const entity = ENTITY_MAP[resource];
         for (let i = 0; i < items.length; i++) {
             const emailLocationParam = this.getNodeParameter('emailLocation', i, 'Work');
@@ -226,7 +283,7 @@ class CiviCrm {
                         select: ['id', 'name', 'title', 'subject', 'display_name'],
                     };
                 const res = await GenericFunctions_1.civicrmApiRequest.call(this, 'POST', `/civicrm/ajax/api4/${entity}/get`, params);
-                out.push({ json: res?.values?.[0] ?? {} });
+                out.push({ json: (_b = (_a = res === null || res === void 0 ? void 0 : res.values) === null || _a === void 0 ? void 0 : _a[0]) !== null && _b !== void 0 ? _b : {} });
                 continue;
             }
             /* ======================================================
@@ -241,7 +298,7 @@ class CiviCrm {
                     try {
                         where = JSON.parse(whereJson);
                     }
-                    catch {
+                    catch (error) {
                         throw new Error('Invalid JSON in whereJson');
                     }
                 }
@@ -276,19 +333,23 @@ class CiviCrm {
                 if (returnAll) {
                     let offset = 0;
                     const page = 500;
-                    while (true) {
+                    let hasMore = true;
+                    while (hasMore) {
                         const r = await GenericFunctions_1.civicrmApiRequest.call(this, 'POST', `/civicrm/ajax/api4/${entity}/get`, { ...params, limit: page, offset });
-                        const vals = r?.values ?? [];
+                        const vals = (_c = r === null || r === void 0 ? void 0 : r.values) !== null && _c !== void 0 ? _c : [];
                         for (const v of vals)
                             out.push({ json: v });
-                        if (vals.length < page)
-                            break;
-                        offset += page;
+                        if (vals.length < page) {
+                            hasMore = false;
+                        }
+                        else {
+                            offset += page;
+                        }
                     }
                 }
                 else {
                     const r = await GenericFunctions_1.civicrmApiRequest.call(this, 'POST', `/civicrm/ajax/api4/${entity}/get`, { ...params, limit });
-                    const vals = r?.values ?? [];
+                    const vals = (_d = r === null || r === void 0 ? void 0 : r.values) !== null && _d !== void 0 ? _d : [];
                     for (const v of vals)
                         out.push({ json: v });
                 }
@@ -322,31 +383,6 @@ class CiviCrm {
             const emailData = {};
             const phoneData = {};
             const addressData = {};
-            function normalizeBirthDate(input) {
-                if (!input)
-                    return input;
-                let v = input.trim();
-                if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
-                }
-                else if (/^\d{2}\/\d{2}\/\d{4}$/.test(v)) {
-                    const [d, m, y] = v.split('/');
-                    v = `${y}-${m}-${d}`;
-                }
-                else if (/^\d{2}-\d{2}-\d{4}$/.test(v)) {
-                    const [d, m, y] = v.split('-');
-                    v = `${y}-${m}-${d}`;
-                }
-                else if (/^\d{4}\/\d{2}\/\d{2}$/.test(v)) {
-                    v = v.replace(/\//g, '-');
-                }
-                else if (/^\d{4}\.\d{2}\.\d{2}$/.test(v)) {
-                    v = v.replace(/\./g, '-');
-                }
-                const dt = new Date(v);
-                if (isNaN(dt.getTime()))
-                    throw new Error(`Invalid birth_date: ${input}`);
-                return v;
-            }
             let locationTypeMap = {};
             if (resource === 'contact') {
                 locationTypeMap = await getLocationTypeMap.call(this);
@@ -440,7 +476,7 @@ class CiviCrm {
             let contactId = id;
             if (isCreate) {
                 const r = await GenericFunctions_1.civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/Contact/create', { values });
-                contactId = r?.values?.[0]?.id;
+                contactId = (_f = (_e = r === null || r === void 0 ? void 0 : r.values) === null || _e === void 0 ? void 0 : _e[0]) === null || _f === void 0 ? void 0 : _f.id;
                 if (!contactId)
                     throw new Error('Failed to create contact.');
             }
@@ -526,7 +562,7 @@ class CiviCrm {
                     }
                     : {}),
             });
-            out.push({ json: res?.values?.[0] ?? {} });
+            out.push({ json: (_h = (_g = res === null || res === void 0 ? void 0 : res.values) === null || _g === void 0 ? void 0 : _g[0]) !== null && _h !== void 0 ? _h : {} });
         }
         return [out];
     }
@@ -536,7 +572,7 @@ exports.CiviCrm = CiviCrm;
    UTILS
 ============================================================================ */
 function convertValue(val) {
-    const t = String(val ?? '').trim();
+    const t = String(val !== null && val !== void 0 ? val : '').trim();
     if (t === '')
         return '';
     if (t === 'true')
@@ -550,7 +586,35 @@ function convertValue(val) {
         if (typeof j === 'object')
             return j;
     }
-    catch { }
+    catch (error) {
+        // Not valid JSON, return original value
+    }
     return val;
+}
+function normalizeBirthDate(input) {
+    if (!input)
+        return input;
+    let v = input.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+        // Already in correct format
+    }
+    else if (/^\d{2}\/\d{2}\/\d{4}$/.test(v)) {
+        const [d, m, y] = v.split('/');
+        v = `${y}-${m}-${d}`;
+    }
+    else if (/^\d{2}-\d{2}-\d{4}$/.test(v)) {
+        const [d, m, y] = v.split('-');
+        v = `${y}-${m}-${d}`;
+    }
+    else if (/^\d{4}\/\d{2}\/\d{2}$/.test(v)) {
+        v = v.replace(/\//g, '-');
+    }
+    else if (/^\d{4}\.\d{2}\.\d{2}$/.test(v)) {
+        v = v.replace(/\./g, '-');
+    }
+    const dt = new Date(v);
+    if (isNaN(dt.getTime()))
+        throw new Error(`Invalid birth_date: ${input}`);
+    return v;
 }
 exports.default = CiviCrm;
