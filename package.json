@@ -1,6 +1,6 @@
 {
   "name": "@ixiam/n8n-nodes-civicrm",
-  "version": "1.1.28",
+  "version": "1.1.29",
   "description": "Full-featured CiviCRM API v4 integration for n8n with support for Contacts, Memberships, Groups, Relationships, Activities and structured sub-entities like Email, Phone, and Address.",
   "license": "MIT",
   "keywords": [
@@ -15,7 +15,7 @@
   "scripts": {
     "dev": "n8n-node dev",
     "build": "n8n-node build && pnpm run copy:assets",
-    "copy:assets": "cp src/nodes/CiviCrm/civicrm.svg dist/nodes/CiviCrm/",
+    "copy:assets": "cp nodes/CiviCrm/civicrm.svg dist/nodes/CiviCrm/",
     "lint": "n8n-node lint",
     "release": "n8n-node release",
     "test": "npm run build"
