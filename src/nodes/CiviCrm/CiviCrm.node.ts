@@ -236,16 +236,16 @@ export class CiviCrm implements INodeType {
 	methods = {
 		loadOptions: {
 			async loadOptionValues(this: ILoadOptionsFunctions) {
-				const { baseUrl, apiToken } = (await this.getCredentials('civiCrmApi')) as {
-					baseUrl: string;
-					apiToken: string;
+				const { url, apiKey } = (await this.getCredentials('civiCrmApi')) as {
+					url: string;
+					apiKey: string;
 				};
 
 				const res = await this.helpers.httpRequest({
 					method: 'POST',
-					url: `${baseUrl.replace(/\/$/, '')}/civicrm/ajax/api4/OptionValue/get`,
+					url: `${url.replace(/\/$/, '')}/civicrm/ajax/api4/OptionValue/get`,
 					headers: {
-						'X-Civi-Auth': `Bearer ${apiToken}`,
+						Authorization: `Bearer ${apiKey}`,
 						'Content-Type': 'application/x-www-form-urlencoded',
 					},
 					body: { params: JSON.stringify({ limit: 50, select: ['id', 'label'] }) },

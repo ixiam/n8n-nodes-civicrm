@@ -11,17 +11,14 @@ export async function civicrmApiRequest(
   path: string,
   body: Record<string, unknown>,
 ) {
-  const { baseUrl, apiToken } = (await this.getCredentials('civiCrmApi')) as {
-    baseUrl: string;
-    apiToken: string;
-  };
+  const credentials = await this.getCredentials('civiCrmApi');
+  const baseUrl = (credentials.url as string).replace(/\/$/, '');
 
   const options: IHttpRequestOptions = {
     method,
-    url: `${baseUrl.replace(/\/$/, '')}${path}`,
+    url: `${baseUrl}${path}`,
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'X-Civi-Auth': `Bearer ${apiToken}`,
     },
     // cuerpo plano como espera Civi-Go
     body: {
@@ -31,7 +28,11 @@ export async function civicrmApiRequest(
   };
 
   try {
-    const response = await this.helpers.httpRequest(options);
+    const response = await this.helpers.httpRequestWithAuthentication.call(
+      this,
+      'civiCrmApi',
+      options,
+    );
     return response;
   } catch (error: unknown) {
     throw new NodeApiError(this.getNode(), error as JsonObject);

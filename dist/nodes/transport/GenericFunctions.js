@@ -9,13 +9,13 @@ const n8n_workflow_1 = require("n8n-workflow");
  */
 async function civicrmApiRequest(method, path, body) {
     var _a;
-    const { baseUrl, apiToken } = (await this.getCredentials('civiCrmApi'));
+    const credentials = await this.getCredentials('civiCrmApi');
+    const baseUrl = credentials.url.replace(/\/$/, '');
     const options = {
         method,
-        url: `${baseUrl.replace(/\/$/, '')}${path}`,
+        url: `${baseUrl}${path}`,
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-            'X-Civi-Auth': `Bearer ${apiToken}`,
         },
         // cuerpo plano como espera Civi-Go
         body: {
@@ -24,7 +24,7 @@ async function civicrmApiRequest(method, path, body) {
         json: true,
     };
     try {
-        const response = await this.helpers.httpRequest(options);
+        const response = await this.helpers.httpRequestWithAuthentication.call(this, 'civiCrmApi', options);
         return response;
     }
     catch (error) {

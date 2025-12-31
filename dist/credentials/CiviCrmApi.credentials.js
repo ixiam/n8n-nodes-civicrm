@@ -5,20 +5,23 @@ class CiviCrmApi {
     constructor() {
         this.name = 'civiCrmApi';
         this.displayName = 'CiviCRM API';
-        this.documentationUrl = 'https://docs.civicrm.org/dev/en/latest/api/';
+        this.documentationUrl = 'https://docs.civicrm.org/dev/en/latest/api/v4/usage/#auth';
         this.properties = [
             {
-                displayName: 'Base URL',
-                name: 'baseUrl',
+                displayName: 'URL',
+                name: 'url',
                 type: 'string',
                 default: '',
+                placeholder: 'https://example.org/civicrm',
                 required: true,
             },
             {
-                displayName: 'API Token',
-                name: 'apiToken',
+                displayName: 'API Key',
+                name: 'apiKey',
                 type: 'string',
-                typeOptions: { password: true },
+                typeOptions: {
+                    password: true,
+                },
                 default: '',
                 required: true,
             },
@@ -27,14 +30,21 @@ class CiviCrmApi {
             type: 'generic',
             properties: {
                 headers: {
-                    'X-Civi-Auth': '={{ "Bearer " + $credentials.apiToken }}',
+                    Authorization: 'Bearer ={{$credentials.apiKey}}',
                 },
             },
         };
         this.test = {
             request: {
-                baseURL: '={{ $credentials.baseUrl }}',
-                url: '',
+                baseURL: '={{$credentials.url}}',
+                url: '/civicrm/ajax/api4/Contact/get',
+                method: 'POST',
+                body: {
+                    version: 4,
+                    select: ['id'],
+                    limit: 1,
+                },
+                ignoreHttpStatusErrors: false,
             },
         };
     }

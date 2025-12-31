@@ -8,21 +8,24 @@ export class CiviCrmApi implements ICredentialType {
 
 	name = 'civiCrmApi';
 	displayName = 'CiviCRM API';
-	documentationUrl = 'https://docs.civicrm.org/dev/en/latest/api/';
+	documentationUrl = 'https://docs.civicrm.org/dev/en/latest/api/v4/usage/#auth';
 
 	properties: INodeProperties[] = [
 		{
-			displayName: 'Base URL',
-			name: 'baseUrl',
+			displayName: 'URL',
+			name: 'url',
 			type: 'string',
 			default: '',
+			placeholder: 'https://example.org/civicrm',
 			required: true,
 		},
 		{
-			displayName: 'API Token',
-			name: 'apiToken',
+			displayName: 'API Key',
+			name: 'apiKey',
 			type: 'string',
-			typeOptions: { password: true },
+			typeOptions: {
+				password: true,
+			},
 			default: '',
 			required: true,
 		},
@@ -32,15 +35,22 @@ export class CiviCrmApi implements ICredentialType {
 		type: 'generic' as const,
 		properties: {
 			headers: {
-				'X-Civi-Auth': '={{ "Bearer " + $credentials.apiToken }}',
+				Authorization: 'Bearer ={{$credentials.apiKey}}',
 			},
 		},
 	};
 
 	test: ICredentialTestRequest = {
 		request: {
-			baseURL: '={{ $credentials.baseUrl }}',
-			url: '',
+			baseURL: '={{$credentials.url}}',
+			url: '/civicrm/ajax/api4/Contact/get',
+			method: 'POST',
+			body: {
+				version: 4,
+				select: ['id'],
+				limit: 1,
+			},
+			ignoreHttpStatusErrors: false,
 		},
 	};
 }

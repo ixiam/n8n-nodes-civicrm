@@ -195,12 +195,12 @@ class CiviCrm {
         this.methods = {
             loadOptions: {
                 async loadOptionValues() {
-                    const { baseUrl, apiToken } = (await this.getCredentials('civiCrmApi'));
+                    const { url, apiKey } = (await this.getCredentials('civiCrmApi'));
                     const res = await this.helpers.httpRequest({
                         method: 'POST',
-                        url: `${baseUrl.replace(/\/$/, '')}/civicrm/ajax/api4/OptionValue/get`,
+                        url: `${url.replace(/\/$/, '')}/civicrm/ajax/api4/OptionValue/get`,
                         headers: {
-                            'X-Civi-Auth': `Bearer ${apiToken}`,
+                            Authorization: `Bearer ${apiKey}`,
                             'Content-Type': 'application/x-www-form-urlencoded',
                         },
                         body: { params: JSON.stringify({ limit: 50, select: ['id', 'label'] }) },
