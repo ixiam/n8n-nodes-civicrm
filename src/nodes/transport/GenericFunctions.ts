@@ -12,7 +12,7 @@ export async function civicrmApiRequest(
   body: Record<string, unknown>,
 ) {
   const credentials = await this.getCredentials('civiCrmApi');
-  const baseUrl = (credentials.url as string).replace(/\/$/, '');
+  const baseUrl = (credentials.baseUrl as string).replace(/\/$/, '');
 
   const options: IHttpRequestOptions = {
     method,

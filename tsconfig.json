@@ -13,8 +13,7 @@
     "skipLibCheck": true
   },
   "include": [
-    "index.ts",
-    "nodes/**/*",
+    "src/**/*",
     "credentials/**/*"
   ],
   "exclude": [

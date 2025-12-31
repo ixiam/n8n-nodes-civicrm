@@ -12,16 +12,16 @@ export class CiviCrmApi implements ICredentialType {
 
 	properties: INodeProperties[] = [
 		{
-			displayName: 'URL',
-			name: 'url',
+			displayName: 'Base URL',
+			name: 'baseUrl',
 			type: 'string',
 			default: '',
 			placeholder: 'https://example.org/civicrm',
 			required: true,
 		},
 		{
-			displayName: 'API Key',
-			name: 'apiKey',
+			displayName: 'API Token',
+			name: 'apiToken',
 			type: 'string',
 			typeOptions: {
 				password: true,
@@ -35,15 +35,14 @@ export class CiviCrmApi implements ICredentialType {
 		type: 'generic' as const,
 		properties: {
 			headers: {
-				Authorization: 'Bearer ={{$credentials.apiKey}}',
+				'X-Civi-Auth': '={{ "Bearer " + $credentials.apiToken }}',
 			},
 		},
 	};
 
 	test: ICredentialTestRequest = {
 		request: {
-			baseURL: '={{$credentials.url}}',
-			url: '/civicrm/ajax/api4/Contact/get',
+			url: '={{ $credentials.baseUrl }}/civicrm/ajax/api4/Contact/get',
 			method: 'POST',
 			body: {
 				version: 4,
@@ -54,3 +53,5 @@ export class CiviCrmApi implements ICredentialType {
 		},
 	};
 }
+
+export const civiCrmApi = CiviCrmApi;
