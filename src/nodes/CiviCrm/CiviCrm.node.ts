@@ -90,6 +90,356 @@ export class CiviCrm implements INodeType {
 		defaults: { name: 'CiviCRM' },
 		inputs: ['main'],
 		outputs: ['main'],
+
+		// @ts-ignore
+		usableAsTool: true,
+		// @ts-ignore
+		actions: [
+			// ======================================================================
+			// CONTACT
+			// ======================================================================
+			{
+				displayName: 'Get Contact',
+				name: 'getContact',
+				action: 'Get a contact',
+				description: 'Retrieve a contact from CiviCRM by ID or email.',
+				displayOptions: { show: { resource: ['contact'], operation: ['get'] } },
+				properties: [
+					{
+						displayName: 'ID',
+						name: 'id',
+						type: 'number',
+						default: 0,
+						description: 'The internal CiviCRM ID of the contact to retrieve.',
+					},
+				],
+			},
+			{
+				displayName: 'Get Many Contacts',
+				name: 'getManyContacts',
+				action: 'Get many contacts',
+				description: 'Retrieve multiple contacts from CiviCRM with filtering.',
+				displayOptions: { show: { resource: ['contact'], operation: ['getMany'] } },
+				properties: [...genericFields],
+			},
+			{
+				displayName: 'Create Contact',
+				name: 'createContact',
+				action: 'Create a contact',
+				description: 'Create a new contact in CiviCRM.',
+				displayOptions: { show: { resource: ['contact'], operation: ['create'] } },
+				properties: [...upsertFields],
+			},
+			{
+				displayName: 'Update Contact',
+				name: 'updateContact',
+				action: 'Update a contact',
+				description: 'Update an existing contact in CiviCRM.',
+				displayOptions: { show: { resource: ['contact'], operation: ['update'] } },
+				properties: [
+					{
+						displayName: 'ID',
+						name: 'id',
+						type: 'number',
+						default: 0,
+						description: 'The ID of the contact to update.',
+					},
+					...upsertFields,
+				],
+			},
+			{
+				displayName: 'Delete Contact',
+				name: 'deleteContact',
+				action: 'Delete a contact',
+				description: 'Delete a contact from CiviCRM.',
+				displayOptions: { show: { resource: ['contact'], operation: ['delete'] } },
+				properties: [
+					{
+						displayName: 'ID',
+						name: 'id',
+						type: 'number',
+						default: 0,
+						description: 'The ID of the contact to delete.',
+					},
+				],
+			},
+
+			// ======================================================================
+			// MEMBERSHIP
+			// ======================================================================
+			{
+				displayName: 'Get Membership',
+				name: 'getMembership',
+				action: 'Get a membership',
+				description: 'Retrieve a membership by ID.',
+				displayOptions: { show: { resource: ['membership'], operation: ['get'] } },
+				properties: [
+					{
+						displayName: 'ID',
+						name: 'id',
+						type: 'number',
+						default: 0,
+						description: 'The internal CiviCRM ID of the membership.',
+					},
+				],
+			},
+			{
+				displayName: 'Get Many Memberships',
+				name: 'getManyMemberships',
+				action: 'Get many memberships',
+				description: 'Retrieve multiple memberships.',
+				displayOptions: { show: { resource: ['membership'], operation: ['getMany'] } },
+				properties: [...genericFields],
+			},
+			{
+				displayName: 'Create Membership',
+				name: 'createMembership',
+				action: 'Create a membership',
+				description: 'Create a new membership.',
+				displayOptions: { show: { resource: ['membership'], operation: ['create'] } },
+				properties: [...upsertFields],
+			},
+			{
+				displayName: 'Update Membership',
+				name: 'updateMembership',
+				action: 'Update a membership',
+				description: 'Update an existing membership.',
+				displayOptions: { show: { resource: ['membership'], operation: ['update'] } },
+				properties: [
+					{
+						displayName: 'ID',
+						name: 'id',
+						type: 'number',
+						default: 0,
+						description: 'The ID of the membership to update.',
+					},
+					...upsertFields,
+				],
+			},
+			{
+				displayName: 'Delete Membership',
+				name: 'deleteMembership',
+				action: 'Delete a membership',
+				description: 'Delete a membership.',
+				displayOptions: { show: { resource: ['membership'], operation: ['delete'] } },
+				properties: [
+					{
+						displayName: 'ID',
+						name: 'id',
+						type: 'number',
+						default: 0,
+						description: 'The ID of the membership to delete.',
+					},
+				],
+			},
+
+			// ======================================================================
+			// GROUP
+			// ======================================================================
+			{
+				displayName: 'Get Group',
+				name: 'getGroup',
+				action: 'Get a group',
+				description: 'Retrieve a group by ID.',
+				displayOptions: { show: { resource: ['group'], operation: ['get'] } },
+				properties: [
+					{
+						displayName: 'ID',
+						name: 'id',
+						type: 'number',
+						default: 0,
+						description: 'The internal CiviCRM ID of the group.',
+					},
+				],
+			},
+			{
+				displayName: 'Get Many Groups',
+				name: 'getManyGroups',
+				action: 'Get many groups',
+				description: 'Retrieve multiple groups.',
+				displayOptions: { show: { resource: ['group'], operation: ['getMany'] } },
+				properties: [...genericFields],
+			},
+			{
+				displayName: 'Create Group',
+				name: 'createGroup',
+				action: 'Create a group',
+				description: 'Create a new group.',
+				displayOptions: { show: { resource: ['group'], operation: ['create'] } },
+				properties: [...upsertFields],
+			},
+			{
+				displayName: 'Update Group',
+				name: 'updateGroup',
+				action: 'Update a group',
+				description: 'Update an existing group.',
+				displayOptions: { show: { resource: ['group'], operation: ['update'] } },
+				properties: [
+					{
+						displayName: 'ID',
+						name: 'id',
+						type: 'number',
+						default: 0,
+						description: 'The ID of the group to update.',
+					},
+					...upsertFields,
+				],
+			},
+			{
+				displayName: 'Delete Group',
+				name: 'deleteGroup',
+				action: 'Delete a group',
+				description: 'Delete a group.',
+				displayOptions: { show: { resource: ['group'], operation: ['delete'] } },
+				properties: [
+					{
+						displayName: 'ID',
+						name: 'id',
+						type: 'number',
+						default: 0,
+						description: 'The ID of the group to delete.',
+					},
+				],
+			},
+
+			// ======================================================================
+			// RELATIONSHIP
+			// ======================================================================
+			{
+				displayName: 'Get Relationship',
+				name: 'getRelationship',
+				action: 'Get a relationship',
+				description: 'Retrieve a relationship by ID.',
+				displayOptions: { show: { resource: ['relationship'], operation: ['get'] } },
+				properties: [
+					{
+						displayName: 'ID',
+						name: 'id',
+						type: 'number',
+						default: 0,
+						description: 'The internal CiviCRM ID of the relationship.',
+					},
+				],
+			},
+			{
+				displayName: 'Get Many Relationships',
+				name: 'getManyRelationships',
+				action: 'Get many relationships',
+				description: 'Retrieve multiple relationships.',
+				displayOptions: { show: { resource: ['relationship'], operation: ['getMany'] } },
+				properties: [...genericFields],
+			},
+			{
+				displayName: 'Create Relationship',
+				name: 'createRelationship',
+				action: 'Create a relationship',
+				description: 'Create a new relationship.',
+				displayOptions: { show: { resource: ['relationship'], operation: ['create'] } },
+				properties: [...upsertFields],
+			},
+			{
+				displayName: 'Update Relationship',
+				name: 'updateRelationship',
+				action: 'Update a relationship',
+				description: 'Update an existing relationship.',
+				displayOptions: { show: { resource: ['relationship'], operation: ['update'] } },
+				properties: [
+					{
+						displayName: 'ID',
+						name: 'id',
+						type: 'number',
+						default: 0,
+						description: 'The ID of the relationship to update.',
+					},
+					...upsertFields,
+				],
+			},
+			{
+				displayName: 'Delete Relationship',
+				name: 'deleteRelationship',
+				action: 'Delete a relationship',
+				description: 'Delete a relationship.',
+				displayOptions: { show: { resource: ['relationship'], operation: ['delete'] } },
+				properties: [
+					{
+						displayName: 'ID',
+						name: 'id',
+						type: 'number',
+						default: 0,
+						description: 'The ID of the relationship to delete.',
+					},
+				],
+			},
+
+			// ======================================================================
+			// ACTIVITY
+			// ======================================================================
+			{
+				displayName: 'Get Activity',
+				name: 'getActivity',
+				action: 'Get an activity',
+				description: 'Retrieve an activity by ID.',
+				displayOptions: { show: { resource: ['activity'], operation: ['get'] } },
+				properties: [
+					{
+						displayName: 'ID',
+						name: 'id',
+						type: 'number',
+						default: 0,
+						description: 'The internal CiviCRM ID of the activity.',
+					},
+				],
+			},
+			{
+				displayName: 'Get Many Activities',
+				name: 'getManyActivities',
+				action: 'Get many activities',
+				description: 'Retrieve multiple activities.',
+				displayOptions: { show: { resource: ['activity'], operation: ['getMany'] } },
+				properties: [...genericFields],
+			},
+			{
+				displayName: 'Create Activity',
+				name: 'createActivity',
+				action: 'Create an activity',
+				description: 'Create a new activity.',
+				displayOptions: { show: { resource: ['activity'], operation: ['create'] } },
+				properties: [...upsertFields],
+			},
+			{
+				displayName: 'Update Activity',
+				name: 'updateActivity',
+				action: 'Update an activity',
+				description: 'Update an existing activity.',
+				displayOptions: { show: { resource: ['activity'], operation: ['update'] } },
+				properties: [
+					{
+						displayName: 'ID',
+						name: 'id',
+						type: 'number',
+						default: 0,
+						description: 'The ID of the activity to update.',
+					},
+					...upsertFields,
+				],
+			},
+			{
+				displayName: 'Delete Activity',
+				name: 'deleteActivity',
+				action: 'Delete an activity',
+				description: 'Delete an activity.',
+				displayOptions: { show: { resource: ['activity'], operation: ['delete'] } },
+				properties: [
+					{
+						displayName: 'ID',
+						name: 'id',
+						type: 'number',
+						default: 0,
+						description: 'The ID of the activity to delete.',
+					},
+				],
+			},
+		],
 		credentials: [{ name: 'civiCrmApi', required: true }],
 
 		properties: [
@@ -107,6 +457,7 @@ export class CiviCrm implements INodeType {
 				name: 'contactType',
 				type: 'options',
 				default: 'Individual',
+				description: 'Type of contact to create or search for.',
 				options: [
 					{ name: 'Individual', value: 'Individual' },
 					{ name: 'Organization', value: 'Organization' },
@@ -123,6 +474,7 @@ export class CiviCrm implements INodeType {
 				name: 'emailLocation',
 				type: 'options',
 				default: 'Work',
+				description: 'Location type for the email address.',
 				options: [
 					{ name: 'Home', value: 'Home' },
 					{ name: 'Work', value: 'Work' },
@@ -135,6 +487,7 @@ export class CiviCrm implements INodeType {
 				name: 'phoneLocation',
 				type: 'options',
 				default: 'Work',
+				description: 'Location type for the phone number.',
 				options: [
 					{ name: 'Home', value: 'Home' },
 					{ name: 'Work', value: 'Work' },
@@ -148,6 +501,7 @@ export class CiviCrm implements INodeType {
 				name: 'addressLocation',
 				type: 'options',
 				default: 'Home',
+				description: 'Location type for the address.',
 				options: [
 					{ name: 'Home', value: 'Home' },
 					{ name: 'Work', value: 'Work' },
@@ -165,6 +519,7 @@ export class CiviCrm implements INodeType {
 				name: 'isPrimary',
 				type: 'boolean',
 				default: true,
+				description: 'Whether this should be the primary email/phone/address for the contact.',
 				displayOptions: { show: { resource: ['contact'], operation: ['create', 'update'] } },
 			},
 
@@ -177,6 +532,7 @@ export class CiviCrm implements INodeType {
 				type: 'number',
 				default: 0,
 				required: true,
+				description: 'The internal CiviCRM ID of the entity.',
 				displayOptions: {
 					show: {
 						operation: ['get', 'update', 'delete'],
