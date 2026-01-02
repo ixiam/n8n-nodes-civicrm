@@ -10,6 +10,7 @@ export const resourceProp: INodeProperties = {
 	name: 'resource',
 	type: 'options',
 	default: 'contact',
+	description: 'The entity to operate on. Choose "Custom API Call" to access any CiviCRM APIv4 entity not listed.',
 	options: [
 		{ name: 'Contact', value: 'contact' },
 		{ name: 'Membership', value: 'membership' },
@@ -31,6 +32,7 @@ export const operationProp: INodeProperties = {
 	type: 'options',
 	default: 'getMany',
 	noDataExpression: true,
+	description: 'The action to perform on the selected resource.',
 	options: [
 		{ name: 'Create', value: 'create' },
 		{ name: 'Delete', value: 'delete' },

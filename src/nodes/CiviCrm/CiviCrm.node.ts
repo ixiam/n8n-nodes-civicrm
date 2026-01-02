@@ -90,6 +90,33 @@ export class CiviCrm implements INodeType {
 		defaults: { name: 'CiviCRM' },
 		inputs: ['main'],
 		outputs: ['main'],
+
+		// @ts-ignore
+		usableAsTool: true,
+		// @ts-ignore
+		actions: [
+			{
+				displayName: 'Get Contact',
+				name: 'getContact',
+				action: 'Get a contact',
+				description: 'Retrieve a contact from CiviCRM by ID or email.',
+				displayOptions: {
+					show: {
+						resource: ['contact'],
+						operation: ['get'],
+					},
+				},
+				properties: [
+					{
+						displayName: 'ID',
+						name: 'id',
+						type: 'number',
+						default: 0,
+						description: 'The internal CiviCRM ID of the contact to retrieve.',
+					},
+				],
+			},
+		],
 		credentials: [{ name: 'civiCrmApi', required: true }],
 
 		properties: [
@@ -107,6 +134,7 @@ export class CiviCrm implements INodeType {
 				name: 'contactType',
 				type: 'options',
 				default: 'Individual',
+				description: 'Type of contact to create or search for.',
 				options: [
 					{ name: 'Individual', value: 'Individual' },
 					{ name: 'Organization', value: 'Organization' },
@@ -123,6 +151,7 @@ export class CiviCrm implements INodeType {
 				name: 'emailLocation',
 				type: 'options',
 				default: 'Work',
+				description: 'Location type for the email address.',
 				options: [
 					{ name: 'Home', value: 'Home' },
 					{ name: 'Work', value: 'Work' },
@@ -135,6 +164,7 @@ export class CiviCrm implements INodeType {
 				name: 'phoneLocation',
 				type: 'options',
 				default: 'Work',
+				description: 'Location type for the phone number.',
 				options: [
 					{ name: 'Home', value: 'Home' },
 					{ name: 'Work', value: 'Work' },
@@ -148,6 +178,7 @@ export class CiviCrm implements INodeType {
 				name: 'addressLocation',
 				type: 'options',
 				default: 'Home',
+				description: 'Location type for the address.',
 				options: [
 					{ name: 'Home', value: 'Home' },
 					{ name: 'Work', value: 'Work' },
@@ -165,6 +196,7 @@ export class CiviCrm implements INodeType {
 				name: 'isPrimary',
 				type: 'boolean',
 				default: true,
+				description: 'Whether this should be the primary email/phone/address for the contact.',
 				displayOptions: { show: { resource: ['contact'], operation: ['create', 'update'] } },
 			},
 
@@ -177,6 +209,7 @@ export class CiviCrm implements INodeType {
 				type: 'number',
 				default: 0,
 				required: true,
+				description: 'The internal CiviCRM ID of the entity.',
 				displayOptions: {
 					show: {
 						operation: ['get', 'update', 'delete'],
