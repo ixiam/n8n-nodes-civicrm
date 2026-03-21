@@ -641,39 +641,39 @@ export class CiviCrm implements INodeType {
 		const resource = this.getNodeParameter('resource', 0) as Resource;
 		const operation = this.getNodeParameter('operation', 0) as Operation;
 
-		// Custom API call: generic passthrough to any API4 entity/action
-		if (resource === 'customApi') {
-			const entity = this.getNodeParameter('customEntity', 0) as string;
-			const action = this.getNodeParameter('customAction', 0) as string;
-			const paramsJson = this.getNodeParameter('customParamsJson', 0, '') as string;
-
-			let params: Record<string, unknown> = {};
-			if (paramsJson) {
-				try {
-					params = JSON.parse(paramsJson);
-				} catch (error) {
-					throw new Error('Invalid JSON in "Params (JSON)"');
-				}
-			}
-
-			const res = await civicrmApiRequest.call(
-				this,
-				'POST',
-				`/civicrm/ajax/api4/${entity}/${action}`,
-				params,
-			);
-
-			// Return the raw API4 response so advanced users can work with values and metadata
-			out.push({
-				json: res as IDataObject,
-				pairedItem: { item: 0 },
-			});
-			return [out];
-		}
-
-		const entity = ENTITY_MAP[resource];
+		const entity = resource !== 'customApi' ? ENTITY_MAP[resource] : '';
 
 		for (let i = 0; i < items.length; i++) {
+			// Custom API call: generic passthrough to any API4 entity/action
+			if (resource === 'customApi') {
+				const customEntity = this.getNodeParameter('customEntity', i) as string;
+				const action = this.getNodeParameter('customAction', i) as string;
+				const paramsJson = this.getNodeParameter('customParamsJson', i, '') as string;
+
+				let params: Record<string, unknown> = {};
+				if (paramsJson) {
+					try {
+						params = JSON.parse(paramsJson);
+					} catch (error) {
+						throw new Error('Invalid JSON in "Params (JSON)"');
+					}
+				}
+
+				const res = await civicrmApiRequest.call(
+					this,
+					'POST',
+					`/civicrm/ajax/api4/${customEntity}/${action}`,
+					params,
+				);
+
+				// Return the raw API4 response so advanced users can work with values and metadata
+				out.push({
+					json: res as IDataObject,
+					pairedItem: { item: i },
+				});
+				continue;
+			}
+
 			const emailLocationParam = this.getNodeParameter('emailLocation', i, 'Work') as string;
 			const phoneLocationParam = this.getNodeParameter('phoneLocation', i, 'Work') as string;
 			const addressLocationParam = this.getNodeParameter('addressLocation', i, 'Home') as string;
