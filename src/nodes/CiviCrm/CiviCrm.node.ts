@@ -39,7 +39,7 @@ const ENTITY_MAP: Record<Exclude<Resource, 'customApi'>, string> = {
    LOCATION TYPE CACHE
 ============================================================================ */
 
-let locationTypeCache: Record<string, string> | null = null;
+const locationTypeCache: Record<string, Record<string, string>> = {};
 
 function normalizeLocationKey(s: string): string {
 	return String(s || '')
@@ -48,7 +48,10 @@ function normalizeLocationKey(s: string): string {
 }
 
 async function getLocationTypeMap(this: IExecuteFunctions): Promise<Record<string, string>> {
-	if (locationTypeCache) return locationTypeCache;
+	const credentials = await this.getCredentials('civiCrmApi');
+	const baseUrl = String(credentials?.baseUrl || 'default');
+
+	if (locationTypeCache[baseUrl]) return locationTypeCache[baseUrl];
 
 	const res = await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/OptionValue/get', {
 		where: [['option_group_id:name', '=', 'location_type']],
@@ -68,7 +71,7 @@ async function getLocationTypeMap(this: IExecuteFunctions): Promise<Record<strin
 		if (k2) map[k2] = name;
 	}
 
-	locationTypeCache = map;
+	locationTypeCache[baseUrl] = map;
 	return map;
 }
 
@@ -85,11 +88,11 @@ export class CiviCrm implements INodeType {
 		version: 1,
 		description:
 			'Interact with CiviCRM API v4 (Civi-Go compatible).\n\n' +
-			'Supports Contact, Membership, Group, Relationship and Activity entities.\n' +
+			'Supports Contact, Membership, Group, Relationship, Activity entities, and Custom API Call.\n' +
 			'Includes dynamic mapping of email, phone, address and location types.\n' +
 			'Includes birth_date validation and JSON filters for GET MANY.\n',
 		defaults: { name: 'CiviCRM' },
-		subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
+		subtitle: '={{{"get":"Get","getMany":"Get Many","create":"Create","update":"Update","delete":"Delete"}[$parameter["operation"]] + ": " + {"contact":"Contact","membership":"Membership","group":"Group","relationship":"Relationship","activity":"Activity","customApi":"Custom API Call"}[$parameter["resource"]]}}',
 		inputs: [NodeConnectionTypes.Main],
 		outputs: [NodeConnectionTypes.Main],
 
@@ -97,9 +100,6 @@ export class CiviCrm implements INodeType {
 		usableAsTool: true,
 		// @ts-ignore
 		actions: [
-			// ======================================================================
-			// CONTACT
-			// ======================================================================
 			{
 				displayName: 'Get Contact',
 				name: 'getContact',

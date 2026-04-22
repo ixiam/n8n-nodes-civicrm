@@ -1,7 +1,7 @@
 import type { INodeProperties } from 'n8n-workflow';
 export const genericFields: INodeProperties[] = [
   { displayName: 'Return All', name: 'returnAll', type: 'boolean', default: false, description: 'Whether to return all results or only up to a given limit.', displayOptions: { show: { operation: ['getMany'] } } },
-  { displayName: 'Limit', name: 'limit', type: 'number', typeOptions: { minValue: 1, maxValue: 1000 }, default: 100, description: 'Max number of results to return.', displayOptions: { show: { operation: ['getMany'], returnAll: [false] } } },
+  { displayName: 'Limit', name: 'limit', type: 'number', typeOptions: { minValue: 1, maxValue: 1000 }, default: 100, description: 'Max number of results to return. Defaults to 100.', displayOptions: { show: { operation: ['getMany'], returnAll: [false] } } },
   { displayName: 'Where (JSON)', name: 'whereJson', type: 'string', default: '', placeholder: `[["first_name","=","Alice"]]`, description: 'JSON array of arrays for filtering. Example: [["first_name","=","Alice"], ["contact_type","=","Individual"]]', displayOptions: { show: { operation: ['getMany'] } } },
 ];
 export const upsertFields: INodeProperties[] = [
