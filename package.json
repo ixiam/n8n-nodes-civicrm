@@ -1,6 +1,6 @@
 {
   "name": "@ixiam/n8n-nodes-civicrm",
-  "version": "2.1.5",
+  "version": "2.1.6",
   "description": "Full-featured CiviCRM API v4 integration for n8n",
   "license": "MIT",
   "keywords": [
@@ -18,7 +18,7 @@
   "scripts": {
     "dev": "n8n-node dev",
     "build": "n8n-node build && pnpm run copy:assets",
-    "copy:assets": "cp src/nodes/CiviCrm/civicrm.svg dist/src/nodes/CiviCrm/",
+    "copy:assets": "mkdir -p dist/src/nodes/CiviCrm dist/credentials && cp src/nodes/CiviCrm/civicrm.svg dist/src/nodes/CiviCrm/ && cp src/nodes/CiviCrm/civicrm.svg dist/credentials/",
     "lint": "n8n-node lint",
     "release": "n8n-node release",
     "test": "npm run build"
