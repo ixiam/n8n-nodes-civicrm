@@ -1,5 +1,6 @@
 import type { IExecuteFunctions, IHttpRequestOptions, JsonObject } from 'n8n-workflow';
 import { NodeApiError } from 'n8n-workflow';
+import { isJwtAuthEnabled, getValidToken } from './JwtAuth';
 
 /**
  * Executes a CiviCRM API v4 call (Civi-Go).
@@ -14,11 +15,23 @@ export async function civicrmApiRequest(
   const credentials = await this.getCredentials('civiCrmApi');
   const baseUrl = (credentials.baseUrl as string).replace(/\/$/, '');
 
+  // Determine which token to use
+  let authToken = credentials.apiToken as string;
+  
+  if (isJwtAuthEnabled(credentials)) {
+    authToken = getValidToken({
+      siteKey: credentials.siteKey as string,
+      jwtExpiry: (credentials.jwtExpiry as number) || 900,
+      baseUrl,
+    });
+  }
+
   const options: IHttpRequestOptions = {
     method,
     url: `${baseUrl}${path}`,
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
+      'X-Civi-Auth': `Bearer ${authToken}`,
     },
     // flat body as expected by Civi-Go
     body: {

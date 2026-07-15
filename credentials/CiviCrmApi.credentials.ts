@@ -30,6 +30,40 @@ export class CiviCrmApi implements ICredentialType {
 			default: '',
 			required: true,
 		},
+		{
+			displayName: 'Enable JWT Authentication',
+			name: 'enableJwtAuth',
+			type: 'boolean',
+			default: false,
+			description: 'Use JWT tokens signed with Site Key for enhanced security',
+		},
+		{
+			displayName: 'Site Key',
+			name: 'siteKey',
+			type: 'string',
+			typeOptions: {
+				password: true,
+			},
+			default: '',
+			description: 'Shared secret for JWT signing (must match CiviCRM AuthX Consumer Secret)',
+			displayOptions: {
+				show: {
+					enableJwtAuth: [true],
+				},
+			},
+		},
+		{
+			displayName: 'JWT Expiry (seconds)',
+			name: 'jwtExpiry',
+			type: 'number',
+			default: 900,
+			description: 'Token lifetime in seconds (default: 900 = 15 minutes)',
+			displayOptions: {
+				show: {
+					enableJwtAuth: [true],
+				},
+			},
+		},
 	];
 
 	authenticate = {
