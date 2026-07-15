@@ -66,15 +66,6 @@ export class CiviCrmApi implements ICredentialType {
 		},
 	];
 
-	authenticate = {
-		type: 'generic' as const,
-		properties: {
-			headers: {
-				'X-Civi-Auth': '={{ "Bearer " + $credentials.apiToken }}',
-			},
-		},
-	};
-
 	test: ICredentialTestRequest = {
 		request: {
 			baseURL: '={{$credentials.baseUrl}}',

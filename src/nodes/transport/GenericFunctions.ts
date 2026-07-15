@@ -41,11 +41,8 @@ export async function civicrmApiRequest(
   };
 
   try {
-    const response = await this.helpers.httpRequestWithAuthentication.call(
-      this,
-      'civiCrmApi',
-      options,
-    );
+    // Use the raw httpRequest helper to avoid automatic header injection
+    const response = await this.helpers.httpRequest.call(this, options);
     return response;
   } catch (error: unknown) {
     throw new NodeApiError(this.getNode(), error as JsonObject);

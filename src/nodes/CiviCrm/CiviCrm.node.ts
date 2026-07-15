@@ -10,6 +10,7 @@ import type {
 import { NodeConnectionTypes } from 'n8n-workflow';
 
 import { civicrmApiRequest } from '../transport/GenericFunctions';
+import { isJwtAuthEnabled, getValidToken } from '../transport/JwtAuth';
 import { resourceProp, operationProp } from './descriptions/resources';
 import { genericFields, upsertFields } from './descriptions/generic';
 
@@ -606,16 +607,26 @@ export class CiviCrm implements INodeType {
 	methods = {
 		loadOptions: {
 			async loadOptionValues(this: ILoadOptionsFunctions) {
-				const { baseUrl } = (await this.getCredentials('civiCrmApi')) as {
-					baseUrl: string;
-					apiToken: string;
-				};
+				const credentials = await this.getCredentials('civiCrmApi');
+				const baseUrl = (credentials.baseUrl as string).replace(/\/$/, '');
+				
+				// Determine auth token
+				let authToken = credentials.apiToken as string;
+				
+				if (isJwtAuthEnabled(credentials)) {
+					authToken = getValidToken({
+						siteKey: credentials.siteKey as string,
+						jwtExpiry: (credentials.jwtExpiry as number) || 900,
+						baseUrl,
+					});
+				}
 
-				const res = await this.helpers.httpRequestWithAuthentication.call(this, 'civiCrmApi', {
+				const res = await this.helpers.httpRequest.call(this, {
 					method: 'POST',
-					url: `${(baseUrl as string).replace(/\/$/, '')}/civicrm/ajax/api4/OptionValue/get`,
+					url: `${baseUrl}/civicrm/ajax/api4/OptionValue/get`,
 					headers: {
 						'Content-Type': 'application/x-www-form-urlencoded',
+						'X-Civi-Auth': `Bearer ${authToken}`,
 					},
 					body: { params: JSON.stringify({ limit: 50, select: ['id', 'label'] }) },
 					json: true,
