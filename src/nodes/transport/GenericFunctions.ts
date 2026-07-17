@@ -15,24 +15,25 @@ export async function civicrmApiRequest(
   const credentials = await this.getCredentials('civiCrmApi');
   const baseUrl = (credentials.baseUrl as string).replace(/\/$/, '');
 
-  // Determine which token to use
-  let authToken = credentials.apiToken as string;
-  
+  // Always send API token in X-Civi-Auth header for backward compatibility
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/x-www-form-urlencoded',
+    'X-Civi-Auth': `Bearer ${credentials.apiToken as string}`,
+  };
+
+  // Add Authorization header with JWT if enhanced auth is enabled
   if (isJwtAuthEnabled(credentials)) {
-    authToken = getValidToken({
+    headers['Authorization'] = `Bearer ${getValidToken({
       siteKey: credentials.siteKey as string,
       jwtExpiry: (credentials.jwtExpiry as number) || 900,
       baseUrl,
-    });
+    })}`;
   }
 
   const options: IHttpRequestOptions = {
     method,
     url: `${baseUrl}${path}`,
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'X-Civi-Auth': `Bearer ${authToken}`,
-    },
+    headers,
     // flat body as expected by Civi-Go
     body: {
       params: JSON.stringify(body.params ?? body),
