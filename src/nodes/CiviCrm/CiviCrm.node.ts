@@ -610,21 +610,20 @@ export class CiviCrm implements INodeType {
 				const credentials = await this.getCredentials('civiCrmApi');
 				const baseUrl = (credentials.baseUrl as string).replace(/\/$/, '');
 				
-				// Use separate headers: either X-Civi-Auth (API Key) OR Authorization (JWT)
+				// Use combined headers: always send X-Civi-Auth for backward compatibility,
+				// and add Authorization header with JWT when enhanced auth is enabled
 				const headers: Record<string, string> = {
 					'Content-Type': 'application/x-www-form-urlencoded',
+					'X-Civi-Auth': `Bearer ${credentials.apiToken as string}`,
 				};
 				
 				if (isJwtAuthEnabled(credentials)) {
-					// JWT enabled: use Authorization header with JWT token
+					// JWT enabled: also send Authorization header with JWT token
 					headers['Authorization'] = `Bearer ${getValidToken({
 						siteKey: credentials.siteKey as string,
 						jwtExpiry: (credentials.jwtExpiry as number) || 900,
 						baseUrl,
 					})}`;
-				} else {
-					// JWT disabled: use X-Civi-Auth header with API token
-					headers['X-Civi-Auth'] = `Bearer ${credentials.apiToken as string}`;
 				}
 
 				const res = await this.helpers.httpRequest.call(this, {
