@@ -45,12 +45,14 @@ export class CiviCrmApi implements ICredentialType {
 				password: true,
 			},
 			default: '',
+			placeholder: 'Ex: your-site-secret-key',
 			description: 'Shared secret for JWT signing (must match CiviCRM AuthX Consumer Secret)',
 			displayOptions: {
 				show: {
 					enableJwtAuth: [true],
 				},
 			},
+			required: false,
 		},
 		{
 			displayName: 'JWT Expiry (seconds)',
