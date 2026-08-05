@@ -12,7 +12,6 @@ const jwtValidationCache: Record<string, true> = {};
 function getJwtValidationCacheKey(credentials: Record<string, unknown>, baseUrl: string): string {
   return [
     baseUrl,
-    String(credentials.apiToken ?? ''),
     String(credentials.siteKey ?? ''),
     String(credentials.jwtExpiry ?? 900),
   ].join('|');
@@ -48,10 +47,14 @@ export async function validateJwtIfEnabled(
   this: IExecuteFunctions | ILoadOptionsFunctions,
   credentials: Record<string, unknown>,
   baseUrl: string,
-  headers: Record<string, string>,
 ) {
   if (!isJwtAuthEnabled(credentials)) {
     return;
+  }
+
+  const siteKey = String(credentials.siteKey ?? '').trim();
+  if (!siteKey) {
+    throw new Error('JWT authentication is enabled but Site Key is empty.');
   }
 
   const cacheKey = getJwtValidationCacheKey(credentials, baseUrl);
@@ -59,11 +62,20 @@ export async function validateJwtIfEnabled(
     return;
   }
 
+  const jwtOnlyHeaders: Record<string, string> = {
+    'Content-Type': 'application/x-www-form-urlencoded',
+    Authorization: `Bearer ${getValidToken({
+      siteKey,
+      jwtExpiry: (credentials.jwtExpiry as number) || 900,
+      baseUrl,
+    })}`,
+  };
+
   try {
     await this.helpers.httpRequest.call(this, {
       method: 'POST',
       url: `${baseUrl}/civicrm/ajax/api4/Contact/get`,
-      headers,
+      headers: jwtOnlyHeaders,
       body: {
         params: JSON.stringify({ select: ['id'], limit: 1 }),
       },
@@ -103,7 +115,7 @@ export async function civicrmApiRequest(
   };
 
   try {
-    await validateJwtIfEnabled.call(this, credentials, baseUrl, headers);
+    await validateJwtIfEnabled.call(this, credentials, baseUrl);
 
     // Use the raw httpRequest helper to avoid automatic header injection
     const response = await this.helpers.httpRequest.call(this, options);
