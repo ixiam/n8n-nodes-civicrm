@@ -23,7 +23,6 @@ export function buildCiviAuthHeaders(
 ): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/x-www-form-urlencoded',
-    'X-Civi-Auth': `Bearer ${credentials.apiToken as string}`,
   };
 
   if (isJwtAuthEnabled(credentials)) {
@@ -33,11 +32,17 @@ export function buildCiviAuthHeaders(
       throw new Error('JWT authentication is enabled but Site Key is empty.');
     }
 
-    headers.Authorization = `Bearer ${getValidToken({
+    const jwtToken = getValidToken({
       siteKey,
       jwtExpiry: (credentials.jwtExpiry as number) || 900,
       baseUrl,
-    })}`;
+    });
+
+    // Send JWT in both places for AuthX compatibility across Header and X-Header modes.
+    headers.Authorization = `Bearer ${jwtToken}`;
+    headers['X-Civi-Auth'] = `Bearer ${jwtToken}`;
+  } else {
+    headers['X-Civi-Auth'] = `Bearer ${credentials.apiToken as string}`;
   }
 
   return headers;
@@ -62,13 +67,16 @@ export async function validateJwtIfEnabled(
     return;
   }
 
+  const jwtToken = getValidToken({
+    siteKey,
+    jwtExpiry: (credentials.jwtExpiry as number) || 900,
+    baseUrl,
+  });
+
   const jwtOnlyHeaders: Record<string, string> = {
     'Content-Type': 'application/x-www-form-urlencoded',
-    Authorization: `Bearer ${getValidToken({
-      siteKey,
-      jwtExpiry: (credentials.jwtExpiry as number) || 900,
-      baseUrl,
-    })}`,
+    Authorization: `Bearer ${jwtToken}`,
+    'X-Civi-Auth': `Bearer ${jwtToken}`,
   };
 
   try {
