@@ -26,15 +26,43 @@ class CiviCrmApi {
                 default: '',
                 required: true,
             },
-        ];
-        this.authenticate = {
-            type: 'generic',
-            properties: {
-                headers: {
-                    'X-Civi-Auth': '={{ "Bearer " + $credentials.apiToken }}',
+            {
+                displayName: 'Enable JWT Authentication',
+                name: 'enableJwtAuth',
+                type: 'boolean',
+                default: false,
+                description: 'Use JWT tokens signed with Site Key for enhanced security',
+            },
+            {
+                displayName: 'Site Key',
+                name: 'siteKey',
+                type: 'string',
+                typeOptions: {
+                    password: true,
+                },
+                default: '',
+                placeholder: 'Ex: your-site-secret-key',
+                description: 'Shared secret for JWT signing (must match CiviCRM AuthX Consumer Secret)',
+                displayOptions: {
+                    show: {
+                        enableJwtAuth: [true],
+                    },
+                },
+                required: false,
+            },
+            {
+                displayName: 'JWT Expiry (seconds)',
+                name: 'jwtExpiry',
+                type: 'number',
+                default: 900,
+                description: 'Token lifetime in seconds (default: 900 = 15 minutes)',
+                displayOptions: {
+                    show: {
+                        enableJwtAuth: [true],
+                    },
                 },
             },
-        };
+        ];
         this.test = {
             request: {
                 baseURL: '={{$credentials.baseUrl}}',
@@ -42,6 +70,7 @@ class CiviCrmApi {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Civi-Auth': '={{ "Bearer " + $credentials.apiToken }}',
                 },
                 body: {
                     params: JSON.stringify({ select: ['id'], limit: 1 }),
