@@ -75,7 +75,7 @@ export class CiviCrmApi implements ICredentialType {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/x-www-form-urlencoded',
-				'X-Civi-Auth': 'Bearer {{ $credentials.apiToken }}',
+				'X-Civi-Auth': '={{ "Bearer " + $credentials.apiToken }}',
 			},
 			body: {
 				params: JSON.stringify({ select: ['id'], limit: 1 }),
