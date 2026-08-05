@@ -9,8 +9,11 @@ import type {
 } from 'n8n-workflow';
 import { NodeConnectionTypes } from 'n8n-workflow';
 
-import { civicrmApiRequest } from '../transport/GenericFunctions';
-import { isJwtAuthEnabled, getValidToken } from '../transport/JwtAuth';
+import {
+	civicrmApiRequest,
+	buildCiviAuthHeaders,
+	validateJwtIfEnabled,
+} from '../transport/GenericFunctions';
 import { resourceProp, operationProp } from './descriptions/resources';
 import { genericFields, upsertFields } from './descriptions/generic';
 
@@ -607,24 +610,11 @@ export class CiviCrm implements INodeType {
 	methods = {
 		loadOptions: {
 			async loadOptionValues(this: ILoadOptionsFunctions) {
-				const credentials = await this.getCredentials('civiCrmApi');
+				const credentials = (await this.getCredentials('civiCrmApi')) as Record<string, unknown>;
 				const baseUrl = (credentials.baseUrl as string).replace(/\/$/, '');
-				
-				// Send headers - let CiviCRM AuthX handle all authentication logic
-				const headers: Record<string, string> = {
-					'Content-Type': 'application/x-www-form-urlencoded',
-					'X-Civi-Auth': `Bearer ${credentials.apiToken as string}`,
-				};
-				
-				if (isJwtAuthEnabled(credentials) && credentials.siteKey) {
-					// JWT enabled: also send Authorization header with JWT token
-					// Let CiviCRM AuthX validate it using its configured Site Key
-					headers['Authorization'] = `Bearer ${getValidToken({
-						siteKey: credentials.siteKey as string,
-						jwtExpiry: (credentials.jwtExpiry as number) || 900,
-						baseUrl,
-					})}`;
-				}
+
+				const headers = buildCiviAuthHeaders(credentials, baseUrl);
+				await validateJwtIfEnabled.call(this, credentials, baseUrl, headers);
 
 				const res = await this.helpers.httpRequest.call(this, {
 					method: 'POST',
