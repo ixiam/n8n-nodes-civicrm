@@ -35,7 +35,7 @@ export class CiviCrmApi implements ICredentialType {
 			name: 'enableJwtAuth',
 			type: 'boolean',
 			default: false,
-			description: 'Use JWT tokens signed with Site Key for enhanced security',
+			description: 'Use JWT tokens signed with Site Key for enhanced security. The credential test validates API key only; JWT is validated at runtime when enabled.',
 		},
 		{
 			displayName: 'Site Key',
@@ -52,7 +52,7 @@ export class CiviCrmApi implements ICredentialType {
 					enableJwtAuth: [true],
 				},
 			},
-			required: false,
+			required: true,
 		},
 		{
 			displayName: 'JWT Expiry (seconds)',
