@@ -31,36 +31,33 @@ class CiviCrmApi {
                 name: 'enableJwtAuth',
                 type: 'boolean',
                 default: false,
-                description: 'Use JWT tokens signed with Site Key for enhanced security. The credential test validates API key only; JWT is validated at runtime when enabled.',
+                description: 'Enable server-issued JWT authentication for improved security (time-bound tokens, auto-resolved contact ID). When disabled, uses API key authentication.',
             },
             {
-                displayName: 'Site Key',
-                name: 'siteKey',
-                type: 'string',
-                typeOptions: {
-                    password: true,
-                },
-                default: '',
-                placeholder: 'Ex: your-site-secret-key',
-                description: 'Shared secret for JWT signing (must match CiviCRM AuthX Consumer Secret)',
+                displayName: 'JWT Header Mode',
+                name: 'jwtHeaderMode',
+                type: 'options',
+                default: 'xheader',
                 displayOptions: {
                     show: {
                         enableJwtAuth: [true],
                     },
                 },
-                required: true,
-            },
-            {
-                displayName: 'JWT Expiry (seconds)',
-                name: 'jwtExpiry',
-                type: 'number',
-                default: 900,
-                description: 'Token lifetime in seconds (default: 900 = 15 minutes)',
-                displayOptions: {
-                    show: {
-                        enableJwtAuth: [true],
+                options: [
+                    {
+                        name: 'X-Civi-Auth Header (Recommended)',
+                        value: 'xheader',
                     },
-                },
+                    {
+                        name: 'Authorization Header',
+                        value: 'authorization',
+                    },
+                    {
+                        name: 'Both Headers',
+                        value: 'both',
+                    },
+                ],
+                description: 'Where to send the JWT token.',
             },
         ];
         this.test = {

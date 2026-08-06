@@ -40,14 +40,117 @@ Download: https://civicrm.org/download
 
 ## 🔐 Credentials
 
-The node uses **Bearer Token Authentication**.
+The node supports two authentication modes:
+
+### **1. Standard API Key Authentication**
+Simple and reliable for most use cases.
 
 | Field | Description |
 |-------|-------------|
-| **Base URL** | The root URL of your CiviCRM instance (without trailing slash). Example: `https://crm.example.org` |
-| **API Token** | Sent as header `X-Civi-Auth: Bearer <token>` |
+| **Base URL** | Root URL of CiviCRM. Example: `https://crm.example.org` |
+| **API Token** | Your API Key from CiviCRM (sent as `X-Civi-Auth: Bearer <token>`) |
 
-After entering credentials, click **Save** to validate the connection.
+### **2. JWT Authentication with Auto-Resolve (v3.0+)**
+Time-bounded tokens for enhanced security. **Contact ID is automatically resolved** from your API Key.
+
+| Field | Description |
+|-------|-------------|
+| **Base URL** | Root URL of CiviCRM |
+| **API Token** | Your API Key (used to resolve Contact ID & generate JWT) |
+| **Enable JWT Auth** | Toggle to enable time-bounded JWT tokens |
+| **JWT Header Mode** | Where to send JWT (X-Civi-Auth recommended) |
+
+#### How JWT Auto-Resolve Works
+
+1. When making an API call, the node automatically:
+   - Resolves your Contact ID from your API Key
+   - Generates a time-bounded JWT token (1 hour default)
+   - Caches both for efficiency
+
+2. The JWT is used for API requests, with **automatic fallback to API Key** if:
+   - JWT generation fails
+   - JWT returns empty results
+   - JWT expires
+
+3. **Zero manual configuration** - Contact ID is detected automatically
+
+#### JWT Setup Requirements
+
+**CiviCRM Extensions & Settings:**
+- ✓ AuthX extension enabled (CiviCRM 5.48+)
+- ✓ API Key assigned to a Contact record
+
+**CiviCRM Authentication Configuration**
+
+The following settings must be enabled in CiviCRM's Authentication configuration:
+
+```
+Administer → System Settings → Authentication
+├─ AuthX Header Authentication: ✓ ENABLED
+├─ AuthX XHeader Support: ✓ ENABLED
+├─ Credential Types: Include 'jwt'
+└─ XHeader Name: Set to 'X-Civi-Auth' (default)
+```
+
+**Settings in civicrm.settings.php:**
+```php
+// Enable AuthX for JWT tokens
+define('CIVICRM_AUTHX_XHEADER_CRED', json_encode(['jwt']));
+
+// Optional: Configure JWT signing keys (auto-generated)
+// define('CIVICRM_AUTHX_SIGN_KEY', 'your-signing-key');
+```
+
+**How to Enable:**
+1. Go to **Administer → System Settings → Authentication**
+2. Find **AuthX Settings** section
+3. Check: `✓ Enable X-Header Authentication`
+4. Check: `✓ JWT in X-Civi-Auth header`
+5. Verify **Header name**: `X-Civi-Auth`
+6. **Save** configuration
+
+#### JWT Token Rotation & Security
+
+**Token Lifetime & Auto-Refresh:**
+- JWT tokens auto-expire after 1 hour (configurable in n8n credential)
+- n8n automatically refreshes expired tokens (transparent to workflows)
+- No manual intervention needed
+
+**Security Best Practices:**
+
+| Action | Frequency | Reason |
+|--------|-----------|--------|
+| **Rotate API Keys** | Every 90 days | Limits exposure window if compromised |
+| **Review AuthX Logs** | Monthly | Detect unauthorized access attempts |
+| **Monitor JWT Usage** | Real-time | Alert on unusual patterns |
+| **Update CiviCRM** | As released | Includes security patches |
+| **Audit n8n Workflows** | Quarterly | Verify only needed credentials used |
+
+**When to Regenerate Credentials:**
+- ✅ Regular security rotation (quarterly)
+- ✅ Suspected credential compromise
+- ✅ Staff member leaves organization
+- ✅ n8n instance compromised
+- ✅ Failed authentication attempts detected
+
+**How to Revoke Access Immediately:**
+```
+Option 1: Disable JWT (n8n credential)
+├─ Uncheck "Enable JWT Auth" toggle
+└─ Node falls back to API Key (effective immediately)
+
+Option 2: Regenerate API Key (CiviCRM)
+├─ Go to Contact record
+├─ Regenerate API Key field
+└─ Old JWT & API Key become invalid instantly
+```
+
+**→ See [JWT_QUICKSTART.md](JWT_QUICKSTART.md) for 5-minute setup**  
+**→ See [JWT_AUTORESOLVE_SETUP.md](JWT_AUTORESOLVE_SETUP.md) for detailed configuration**
+
+---
+
+After entering credentials, click **Test credentials** to validate the connection.
 
 ---
 
@@ -128,13 +231,46 @@ Example:
 }
 ```
 
+### **7. JWT Authentication with Auto-Resolve (v3.0+)**
+Enhanced security with time-bounded tokens:
+
+**Features:**
+- ✨ **Automatic Contact ID Resolution** - No manual input needed
+- ✨ **Time-Bounded Tokens** - 1 hour default (configurable)
+- ✨ **Smart Fallback** - Automatically falls back to API Key if JWT insufficient
+- ✨ **Efficient Caching** - Contact ID & JWT cached for performance
+- ✨ **Zero Configuration** - Just enable "JWT Auth" toggle
+
+**Example Workflow:**
+```
+Enable JWT in credential
+    ↓
+Make API call
+    ↓
+[Automatic]
+├─ Resolve: Which Contact owns this API Key?
+├─ Generate: Time-bounded JWT token
+├─ Try: API call with JWT
+└─ Fallback: If empty, retry with API Key
+    ↓
+Get results
+```
+
+**Security Benefits vs API Key Only:**
+- ✓ Tokens expire automatically (1 hour)
+- ✓ Leaked token has limited lifetime
+- ✓ Can't be used outside CiviCRM
+- ✓ Full audit trail available
+
+→ **Learn more:** [JWT_AUTORESOLVE_SETUP.md](JWT_AUTORESOLVE_SETUP.md)
+
 ---
 
 ## Compatibility
 
 - **n8n version:** 1.0.0 or higher  
 - **Node.js:** 18 or higher  
-- **CiviCRM:** API v4 compatible (including Civi-Go)
+- **CiviCRM:** API v4 compatible 
 
 ---
 
