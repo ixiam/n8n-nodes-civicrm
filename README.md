@@ -74,6 +74,8 @@ Time-bounded tokens for enhanced security. **Contact ID is automatically resolve
 
 3. **Zero manual configuration** - Contact ID is detected automatically
 
+> **Note on warnings vs. results:** When JWT auth is enabled but the token can't be obtained (e.g. AuthX disabled or misconfigured on the CiviCRM side), the node still returns data — it silently retries the same request with the API Key. You'll see a **warning in the node's output pane** explaining why JWT wasn't used, but the workflow does not fail and the query results are still shown. This is intentional: JWT failures never break a workflow, they only fall back to API Key auth and surface a non-blocking warning.
+
 #### JWT Setup Requirements
 
 **CiviCRM Extensions & Settings:**

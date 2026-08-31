@@ -110,7 +110,7 @@ A: Automatic fallback to API Key ensures workflows never break.
 A: Never. n8n handles everything automatically. Tokens refresh transparently.
 
 **Q: Can I configure the token lifetime?**  
-A: Yes, in the n8n credential settings (default 1 hour).
+A: Yes, via the "JWT Expiry (Seconds)" field in the n8n credential settings (default 3600 seconds / 1 hour, adjustable from 60 to 86400 seconds).
 
 **Q: Does JWT cost extra?**  
 A: No, it's included in the AuthX extension (available with CiviCRM 5.48+).

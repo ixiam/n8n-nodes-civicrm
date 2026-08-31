@@ -291,12 +291,12 @@ Click **"Test credentials"** button:
 
 ### Step 4: Configure JWT Settings (Optional)
 
-Click **"Advanced"** (if available):
+These fields appear directly below **Enable JWT Auth** once it's toggled on:
 
 | Setting | Default | Notes |
 |---------|---------|-------|
 | **JWT Header Mode** | X-Civi-Auth | Use this (recommended) |
-| **JWT Expiry (TTL)** | 3600 | Seconds (1 hour) |
+| **JWT Expiry (Seconds)** | 3600 | 60–86400 (1 minute to 24 hours) |
 
 **Header Mode Options:**
 - `X-Civi-Auth` (recommended): Uses custom header
@@ -520,9 +520,9 @@ JWT tokens have **TTL (Time To Live)**:
 
 #### Prevention
 
-- Workflows should complete within 1 hour
+- Workflows should complete within the configured expiry
 - Long-running workflows: Split into multiple runs
-- To increase TTL: Edit credential → "JWT Expiry (TTL)" → increase seconds
+- To increase TTL: Edit credential → "JWT Expiry (Seconds)" → increase (max 86400)
 
 #### Example
 
