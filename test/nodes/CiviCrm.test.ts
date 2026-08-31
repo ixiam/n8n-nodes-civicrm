@@ -13,6 +13,8 @@ function mockExecuteContext(items: any[]): IExecuteFunctions {
 				operation: "getMany",
 				returnAll: true,
 				whereJson: "[]",
+				// Get Many's "Contact Type" filter defaults to "Any" (empty) - no implicit filter.
+				contactType: "",
 			};
 			return Object.prototype.hasOwnProperty.call(params, name) ? params[name] : fallback;
 		}) as any,

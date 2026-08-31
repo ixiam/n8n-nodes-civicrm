@@ -459,13 +459,27 @@ export class CiviCrm implements INodeType {
 				name: 'contactType',
 				type: 'options',
 				default: 'Individual',
-				description: 'Type of contact to create or search for.',
+				description: 'Type of contact to create.',
 				options: [
 					{ name: 'Individual', value: 'Individual' },
 					{ name: 'Organization', value: 'Organization' },
 					{ name: 'Household', value: 'Household' },
 				],
-				displayOptions: { show: { resource: ['contact'] } },
+				displayOptions: { show: { resource: ['contact'], operation: ['create', 'update'] } },
+			},
+			{
+				displayName: 'Contact Type',
+				name: 'contactType',
+				type: 'options',
+				default: '',
+				description: 'Filter results to a specific type of contact. Leave as "Any" to return contacts of all types.',
+				options: [
+					{ name: 'Any', value: '' },
+					{ name: 'Individual', value: 'Individual' },
+					{ name: 'Organization', value: 'Organization' },
+					{ name: 'Household', value: 'Household' },
+				],
+				displayOptions: { show: { resource: ['contact'], operation: ['getMany'] } },
 			},
 
 			//

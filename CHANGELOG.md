@@ -4,6 +4,13 @@ All notable changes to `@ixiam/n8n-nodes-civicrm` are documented here.
 
 ---
 
+## [2.1.7] — 2026-08-31
+
+### Fixed
+- **[HIGH]** Contact → Get Many no longer implicitly filters by `contact_type`. The shared "Contact Type" dropdown defaulted to `Individual` and was applied to every Contact operation, so a Get Many with no filters configured silently sent `where: [["contact_type","=","Individual"]]` and could return an empty result with no error. Get Many now has its own optional filter defaulting to "Any" (no filter); Create/Update keep the existing required default.
+
+---
+
 ## [2.1.5] — 2026-04-22
 
 ### Fixed
