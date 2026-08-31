@@ -12,7 +12,6 @@ import { NodeConnectionTypes } from 'n8n-workflow';
 import {
 	civicrmApiRequest,
 	buildCiviAuthHeaders,
-	validateJwtIfEnabled,
 } from '../transport/GenericFunctions';
 import { resourceProp, operationProp } from './descriptions/resources';
 import { genericFields, upsertFields } from './descriptions/generic';
@@ -614,7 +613,6 @@ export class CiviCrm implements INodeType {
 				const baseUrl = (credentials.baseUrl as string).replace(/\/$/, '');
 
 				const headers = buildCiviAuthHeaders(credentials, baseUrl);
-				await validateJwtIfEnabled.call(this, credentials, baseUrl);
 
 				const res = await this.helpers.httpRequest.call(this, {
 					method: 'POST',

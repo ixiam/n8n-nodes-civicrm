@@ -1,13 +1,10 @@
 import type {
   IExecuteFunctions,
-  ILoadOptionsFunctions,
   IHttpRequestOptions,
   JsonObject,
 } from 'n8n-workflow';
 import { NodeApiError } from 'n8n-workflow';
 import { isJwtAuthEnabled, getServerIssuedJwt } from './JwtAuth';
-
-const jwtValidationCache: Record<string, true> = {};
 
 type JwtHeaderMode = 'both' | 'authorization' | 'xheader';
 
@@ -59,14 +56,6 @@ function getHttpErrorDetails(error: unknown): string {
   return status ? `${message} | HTTP ${status}` : message;
 }
 
-function getJwtValidationCacheKey(credentials: Record<string, unknown>, baseUrl: string): string {
-  return [
-    baseUrl,
-    String(credentials.jwtExpiry ?? 3600),
-    getJwtHeaderMode(credentials),
-  ].join('|');
-}
-
 export function buildCiviAuthHeaders(
   credentials: Record<string, unknown>,
   baseUrl: string,
@@ -86,49 +75,6 @@ export function buildCiviAuthHeaders(
   }
 
   return headers;
-}
-
-export async function validateJwtIfEnabled(
-  this: IExecuteFunctions | ILoadOptionsFunctions,
-  credentials: Record<string, unknown>,
-  baseUrl: string,
-  jwtToken?: string,
-) {
-  if (!isJwtAuthEnabled(credentials) || !jwtToken) {
-    return;
-  }
-
-  const headerMode = getJwtHeaderMode(credentials);
-  const cacheKey = getJwtValidationCacheKey(credentials, baseUrl);
-  if (jwtValidationCache[cacheKey]) {
-    return;
-  }
-
-  const jwtOnlyHeaders: Record<string, string> = {
-    'Content-Type': 'application/x-www-form-urlencoded',
-  };
-
-  applyJwtHeaders(jwtOnlyHeaders, jwtToken, headerMode);
-
-  try {
-    await this.helpers.httpRequest.call(this, {
-      method: 'POST',
-      url: `${baseUrl}/civicrm/ajax/api4/Contact/get`,
-      headers: jwtOnlyHeaders,
-      body: {
-        params: JSON.stringify({ select: ['id'], limit: 1 }),
-      },
-      json: true,
-    });
-
-    jwtValidationCache[cacheKey] = true;
-  } catch (error) {
-    const details = getHttpErrorDetails(error);
-    throw new Error(
-      `JWT validation failed (mode=${headerMode}). ` +
-      `Verify AuthxCredential/create is accessible and contact ID is valid. Details: ${details}`,
-    );
-  }
 }
 
 /**
@@ -159,10 +105,20 @@ export async function civicrmApiRequest(
         useJwt = true;
       } else {
         console.warn('[CiviCRM] JWT generation returned no token, falling back to API key');
+        this.addExecutionHints({
+          message: 'JWT authentication could not be obtained (no token returned by CiviCRM). Falling back to API Key authentication.',
+          type: 'warning',
+          location: 'outputPane',
+        });
       }
     } catch (error) {
-      const errorMsg = (error as any)?.message || String(error);
+      const errorMsg = getHttpErrorDetails(error);
       console.warn(`[CiviCRM] JWT generation failed: ${errorMsg}. Falling back to API key.`);
+      this.addExecutionHints({
+        message: `JWT authentication failed (${errorMsg}). Falling back to API Key authentication.`,
+        type: 'warning',
+        location: 'outputPane',
+      });
     }
   }
 
@@ -190,10 +146,21 @@ export async function civicrmApiRequest(
         console.warn(
           '[CiviCRM] JWT returned empty response. Retrying with API key (JWT may have limited permissions).'
         );
+        this.addExecutionHints({
+          message: 'The JWT-authenticated request returned no data (JWT may have limited permissions). Retrying with API Key authentication.',
+          type: 'warning',
+          location: 'outputPane',
+        });
         // Fall through to API key attempt below
       }
     } catch (error: unknown) {
+      const errorMsg = getHttpErrorDetails(error);
       console.warn('[CiviCRM] JWT request failed. Retrying with API key.');
+      this.addExecutionHints({
+        message: `The JWT-authenticated request failed (${errorMsg}). Retrying with API Key authentication.`,
+        type: 'warning',
+        location: 'outputPane',
+      });
       // Fall through to API key attempt below
     }
   }

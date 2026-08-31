@@ -59,7 +59,29 @@ class CiviCrmApi {
                 ],
                 description: 'Where to send the JWT token.',
             },
+            {
+                displayName: 'JWT Expiry (Seconds)',
+                name: 'jwtExpiry',
+                type: 'number',
+                default: 3600,
+                typeOptions: {
+                    minValue: 60,
+                    maxValue: 86400,
+                },
+                displayOptions: {
+                    show: {
+                        enableJwtAuth: [true],
+                    },
+                },
+                description: 'Lifetime of the server-issued JWT, in seconds, before it must be renewed. Default is 3600 (1 hour).',
+            },
         ];
+        // n8n's CredentialsTester always prefers a `test` defined directly here over the
+        // CiviCrm node's `testedBy: 'testCiviCrmApiConnection'` (see CiviCrm.node.ts), so
+        // that JWT-aware test never actually runs while this declarative test exists.
+        // It's kept as a plain API-key connectivity check so "Test credentials" always
+        // works reliably; the node's execution path (addExecutionHints) is what surfaces
+        // JWT-specific failures instead.
         this.test = {
             request: {
                 baseURL: '={{$credentials.baseUrl}}',
