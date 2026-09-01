@@ -31,7 +31,10 @@
   "bugs": {
     "url": "https://github.com/ixiam/n8n-nodes-civicrm/issues"
   },
-  "author": "Julian Reartes <j.reartes@ixiam.com>",
+  "author": {
+    "name": "Julian Reartes",
+    "email": "j.reartes@ixiam.com"
+  },
   "engines": {
     "node": ">=18"
   },
