@@ -9,7 +9,10 @@ import type {
 } from 'n8n-workflow';
 import { NodeConnectionTypes } from 'n8n-workflow';
 
-import { civicrmApiRequest } from '../transport/GenericFunctions';
+import {
+	civicrmApiRequest,
+	buildCiviAuthHeaders,
+} from '../transport/GenericFunctions';
 import { resourceProp, operationProp } from './descriptions/resources';
 import { genericFields, upsertFields } from './descriptions/generic';
 
@@ -620,17 +623,15 @@ export class CiviCrm implements INodeType {
 	methods = {
 		loadOptions: {
 			async loadOptionValues(this: ILoadOptionsFunctions) {
-				const { baseUrl } = (await this.getCredentials('civiCrmApi')) as {
-					baseUrl: string;
-					apiToken: string;
-				};
+				const credentials = (await this.getCredentials('civiCrmApi')) as Record<string, unknown>;
+				const baseUrl = (credentials.baseUrl as string).replace(/\/$/, '');
 
-				const res = await this.helpers.httpRequestWithAuthentication.call(this, 'civiCrmApi', {
+				const headers = buildCiviAuthHeaders(credentials, baseUrl);
+
+				const res = await this.helpers.httpRequest.call(this, {
 					method: 'POST',
-					url: `${(baseUrl as string).replace(/\/$/, '')}/civicrm/ajax/api4/OptionValue/get`,
-					headers: {
-						'Content-Type': 'application/x-www-form-urlencoded',
-					},
+					url: `${baseUrl}/civicrm/ajax/api4/OptionValue/get`,
+					headers,
 					body: { params: JSON.stringify({ limit: 50, select: ['id', 'label'] }) },
 					json: true,
 				});
