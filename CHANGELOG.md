@@ -4,6 +4,20 @@ All notable changes to `@ixiam/n8n-nodes-civicrm` are documented here.
 
 ---
 
+## [3.0.0] — 2026-09-01
+
+### Added
+- **JWT authentication with auto-resolve.** New "Enable JWT Authentication" credential toggle: when on, the node exchanges the API key for a short-lived, server-issued JWT (via CiviCRM's AuthX extension) instead of sending the API key on every request. Contact ID is auto-resolved from the API key - no manual entry needed.
+- **`JWT Header Mode`** credential field: choose whether the JWT is sent via the `X-Civi-Auth` header, the `Authorization` header, or both.
+- **`JWT Expiry (Seconds)`** credential field (default 3600, 60-86400) to configure how long the issued token is valid before it must be renewed.
+- **Visible fallback warnings.** If JWT is enabled but can't be obtained or used (AuthX not configured, permission denied, etc.), the node now surfaces a non-blocking warning in the node's output pane and transparently falls back to API Key auth - workflows never break because of a JWT failure, but the fallback is no longer silent.
+
+### Changed
+- **[BREAKING]** Major version bump to reflect the new credential shape (`enableJwtAuth`, `jwtHeaderMode`, `jwtExpiry` fields added to `CiviCrmApi` credentials). Existing API Key-only credentials keep working unchanged; JWT is opt-in.
+- The credential's "Test credentials" button intentionally remains a plain API-key connectivity check, since n8n always prefers a credential type's declarative `test` over a node's `testedBy` - JWT-specific failures are only surfaced at execution time (see warnings above), not in credential testing.
+
+---
+
 ## [2.1.8] — 2026-09-01
 
 ### Fixed
