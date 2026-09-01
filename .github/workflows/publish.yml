@@ -3,6 +3,7 @@ name: Publish to npm
 on:
   release:
     types: [published]
+  workflow_dispatch: {}
 
 jobs:
   publish:
@@ -16,8 +17,12 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org'
+
+      # Trusted Publishing (OIDC) requires npm CLI >= 11.5.1.
+      - name: Update npm
+        run: npm install -g npm@latest
 
       - uses: pnpm/action-setup@v4
 
@@ -27,7 +32,7 @@ jobs:
       - name: Build
         run: pnpm run build
 
+      # No NPM_TOKEN needed: authenticates via OIDC using the Trusted
+      # Publisher configured on npmjs.com for this repo/workflow.
       - name: Publish with provenance
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
