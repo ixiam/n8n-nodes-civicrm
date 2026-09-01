@@ -4,6 +4,13 @@ All notable changes to `@ixiam/n8n-nodes-civicrm` are documented here.
 
 ---
 
+## [2.1.8] — 2026-09-01
+
+### Fixed
+- **[MEDIUM]** `package.json`'s `author` field converted from a plain string to the object form (`{ "name": ..., "email": ... }`), required by the n8n community node linter (`n8n-nodes-base/community-package-json-author-name-missing`). Flagged by n8n's automated review of the v2.1.7 submission.
+
+---
+
 ## [2.1.7] — 2026-08-31
 
 ### Fixed

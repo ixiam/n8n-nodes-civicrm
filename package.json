@@ -1,6 +1,6 @@
 {
   "name": "@ixiam/n8n-nodes-civicrm",
-  "version": "2.1.7",
+  "version": "2.1.8",
   "description": "Full-featured CiviCRM API v4 integration for n8n",
   "license": "MIT",
   "keywords": [
@@ -31,7 +31,10 @@
   "bugs": {
     "url": "https://github.com/ixiam/n8n-nodes-civicrm/issues"
   },
-  "author": "Julian Reartes <j.reartes@ixiam.com>",
+  "author": {
+    "name": "Julian Reartes",
+    "email": "j.reartes@ixiam.com"
+  },
   "engines": {
     "node": ">=18"
   },
