@@ -80,16 +80,61 @@ export function buildCiviAuthHeaders(
 /**
  * Executes a CiviCRM API v4 call with authentication (JWT or API Key).
  * Falls back to API Key if JWT is unavailable, fails, or returns empty results.
+ *
+ * `runtimeBearerToken` (optional) is a per-execution JWT that the caller
+ * already holds for a specific real user (e.g. a CiviCRM Authx JWT minted by
+ * Drupal for the logged-in contact, passed into the node via the "Runtime
+ * Bearer Token" parameter/expression). When provided, it takes absolute
+ * priority: it is sent as-is and none of the credential-based logic below
+ * (JWT auto-resolve via `getServerIssuedJwt`/`resolveContactId`, or the
+ * empty-response/error fallback to the credential's API key) runs at all.
+ * See the early-return block right below for why.
  */
 export async function civicrmApiRequest(
   this: IExecuteFunctions,
   method: 'POST',
   path: string,
   body: Record<string, unknown>,
+  runtimeBearerToken?: string,
 ) {
   const credentials = (await this.getCredentials('civiCrmApi')) as Record<string, unknown>;
   const baseUrl = (credentials.baseUrl as string).replace(/\/$/, '');
   const apiToken = credentials.apiToken as string;
+
+  // Runtime bearer token path: used exactly as given, with no fallback.
+  //
+  // This exists for per-user permission enforcement (issue #25): the token
+  // here already belongs to a specific real CiviCRM contact (not the
+  // credential's own contact/API key owner), so an empty or denied response
+  // is a *correct* outcome - it means that real user lacks permission for
+  // the requested data - not a failure to silently "fix" by retrying with a
+  // more privileged identity. That is exactly the behavior the credential-based
+  // path below has (empty JWT response -> retry with the plaintext API key),
+  // and it is exactly what must NOT happen here, so this path never falls
+  // through into that logic.
+  if (runtimeBearerToken) {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Authorization: `Bearer ${runtimeBearerToken}`,
+    };
+    const options: IHttpRequestOptions = {
+      method,
+      url: `${baseUrl}${path}`,
+      headers,
+      body: {
+        params: JSON.stringify(body.params ?? body),
+      },
+      json: true,
+    };
+
+    try {
+      // Whatever CiviCRM returns (including an empty `values: []`) is
+      // returned to the caller untouched - no retry, no fallback.
+      return await this.helpers.httpRequest.call(this, options);
+    } catch (error: unknown) {
+      throw new NodeApiError(this.getNode(), error as JsonObject);
+    }
+  }
 
   let jwtToken: string | undefined;
   let useJwt = false;

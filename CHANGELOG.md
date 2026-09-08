@@ -4,6 +4,21 @@ All notable changes to `@ixiam/n8n-nodes-civicrm` are documented here.
 
 ---
 
+## [3.1.0] — 2026-09-04
+
+### Added
+- **Custom API Call: "List Fields" operation.** Calls CiviCRM APIv4 `{Entity}/getFields` for any entity name (`customEntity`, free-typed - Contact, Contribution, Event, Case, custom entities, etc., not limited to the 5 fixed resources) and returns one output item per field (falls back to the raw response if the field list is empty), instead of requiring users to hand-type `customAction: "getFields"` with a manual params blob. New parameter: `getFieldsAction` (optional, default `get`) sets the APIv4 action context passed to `getFields`.
+- **Custom API Call: "Dynamic Search" operation.** Runs `{Entity}/get` for any entity name with a configurable `select` and `where`, reusing the same `[field, operator, value]` triples JSON pattern as the existing Get Many "Where (JSON)" field. New parameters: `searchSelectJson` (JSON array of field names, default `["id"]`), `searchWhereJson` (JSON array of filter triples), `searchReturnAll` / `searchLimit` (500-row pagination when Return All is enabled, matching the existing Get Many pagination behavior).
+- New `operation` dropdown scoped to the Custom API Call resource (`customApiOperationProp`): `Raw API Call` (`raw`, the original hand-typed passthrough, now the explicit default), `List Fields` (`getFields`), `Dynamic Search` (`search`). The existing `operation` dropdown for Contact/Membership/Group/Relationship/Activity (get/getMany/create/update/delete) is unchanged and unaffected - its `displayOptions` were narrowed to those 5 resources so the two same-named `operation` properties don't overlap in the UI.
+
+### Fixed
+- Test suite in `test/nodes/CiviCrm.test.ts` was not runnable: `jest`/`ts-jest`/`@types/jest` were missing from `devDependencies`, and the node import path pointed at `dist/nodes/...` instead of the real build output at `dist/src/nodes/...`. Added the missing dev dependencies, fixed the import, and added a `test:unit` script (`jest`) alongside the existing `test` script (which still just runs the build, unchanged, to avoid altering existing CI expectations around `npm test`).
+
+### Notes
+- Backward compatibility: a Custom API Call node saved before this release may have a legacy `operation` value (`get`/`getMany`/`create`/`update`/`delete`, inherited from the old shared dropdown). All of these still resolve to the Raw API Call path at execution time with `customAction`/`customParamsJson` unchanged; the new operation dropdown also lists them explicitly (labeled "(Legacy)") so `customAction`/`customParamsJson` remain visible/editable in the UI without requiring the user to touch the operation field.
+
+---
+
 ## [3.0.0] — 2026-09-01
 
 ### Added
