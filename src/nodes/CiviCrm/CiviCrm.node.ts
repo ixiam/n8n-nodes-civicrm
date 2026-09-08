@@ -89,12 +89,7 @@ export class CiviCrm implements INodeType {
 		icon: 'file:civicrm.svg',
 		group: ['transform'],
 		version: 1,
-		description:
-			'Interact with CiviCRM API v4 (Civi-Go compatible).\n\n' +
-			'Supports Contact, Membership, Group, Relationship, Activity entities, and Custom API Call.\n' +
-			'Includes dynamic mapping of email, phone, address and location types.\n' +
-			'Includes birth_date validation and JSON filters for GET MANY.\n' +
-			'Custom API Call also exposes List Fields (getFields) and Dynamic Search for any CiviCRM entity.\n',
+		description: 'Interact with CiviCRM API v4 to manage contacts, memberships, groups, and more.',
 		defaults: { name: 'CiviCRM' },
 		subtitle: '={{{"get":"Get","getMany":"Get Many","create":"Create","update":"Update","delete":"Delete","raw":"Raw API Call","getFields":"List Fields","search":"Dynamic Search"}[$parameter["operation"]] + ": " + {"contact":"Contact","membership":"Membership","group":"Group","relationship":"Relationship","activity":"Activity","customApi":"Custom API Call"}[$parameter["resource"]]}}',
 		inputs: [NodeConnectionTypes.Main],
