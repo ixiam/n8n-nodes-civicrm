@@ -4,6 +4,13 @@ All notable changes to `@ixiam/n8n-nodes-civicrm` are documented here.
 
 ---
 
+## [3.2.2] — 2026-09-08
+
+### Fixed
+- `pnpm-lock.yaml` was out of sync with the `jsonwebtoken`/`@types/jsonwebtoken` removal in 3.2.1, which failed CI's `pnpm install --frozen-lockfile` and never actually published. Lockfile regenerated; no other changes. **v3.2.1 was never published — superseded by this release.**
+
+---
+
 ## [3.2.1] — 2026-09-08
 
 ### Fixed
