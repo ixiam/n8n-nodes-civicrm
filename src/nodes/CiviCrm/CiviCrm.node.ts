@@ -742,6 +742,33 @@ export class CiviCrm implements INodeType {
 			},
 
 			//
+			// RUNTIME BEARER TOKEN (per-execution JWT, e.g. Authx JWT of the real
+			// logged-in CiviCRM user - see GenericFunctions.civicrmApiRequest)
+			//
+			{
+				displayName: 'Runtime Bearer Token (Optional)',
+				name: 'runtimeBearerToken',
+				type: 'string',
+				typeOptions: { password: true },
+				default: '',
+				description:
+					'A JWT already issued for a specific real user (e.g. a CiviCRM Authx JWT minted by ' +
+					'Drupal for the logged-in contact), usually set by expression such as ' +
+					'={{ $json.user_jwt }}. If set, it is used exactly as given as the ' +
+					'"Authorization: Bearer" header for this call, bypassing this node\'s ' +
+					"credential-based JWT auto-resolve and API key entirely. If the CiviCRM response " +
+					'is empty or an error with this token, it is returned/thrown as-is - the node does ' +
+					'NOT retry with the credential\'s API key, because an empty result is what a correct ' +
+					"permission check looks like when this user lacks access, not a failure to compensate " +
+					'for. Leave empty to use the credential (JWT auto-resolve or API key) as before.',
+				displayOptions: {
+					show: {
+						operation: ['get', 'getMany', 'getFields', 'search', 'raw'],
+					},
+				},
+			},
+
+			//
 			// DYNAMIC FIELDS
 			//
 			...genericFields,
@@ -794,6 +821,16 @@ export class CiviCrm implements INodeType {
 
 		for (let i = 0; i < items.length; i++) {
 			try {
+			// Per-execution JWT for a specific real user (issue #25 - permissions
+			// by real user via Authx), read once per item so it can come from an
+			// expression like ={{ $json.user_jwt }}. Only threaded into the
+			// read-only operations this parameter is exposed for (get/getMany/
+			// getFields/search/raw Custom API Call) - see civicrmApiRequest for
+			// why an empty result with this token must never fall back to the
+			// credential's API key.
+			const runtimeBearerToken =
+				(this.getNodeParameter('runtimeBearerToken', i, '') as string).trim() || undefined;
+
 			// Custom API resource: raw passthrough, plus first-class List Fields /
 			// Dynamic Search operations for any API4 entity (not just the 5 fixed
 			// resources above).
@@ -815,6 +852,7 @@ export class CiviCrm implements INodeType {
 						'POST',
 						`/civicrm/ajax/api4/${customEntity}/getFields`,
 						{ action: actionContext, loadOptions: true },
+						runtimeBearerToken,
 					);
 
 					const vals = (res?.values ?? []) as IDataObject[];
@@ -867,6 +905,7 @@ export class CiviCrm implements INodeType {
 								'POST',
 								`/civicrm/ajax/api4/${customEntity}/get`,
 								{ select, where, limit: page, offset },
+								runtimeBearerToken,
 							);
 
 							const vals = (r?.values ?? []) as IDataObject[];
@@ -886,6 +925,7 @@ export class CiviCrm implements INodeType {
 							'POST',
 							`/civicrm/ajax/api4/${customEntity}/get`,
 							{ select, where, limit },
+							runtimeBearerToken,
 						);
 
 						const vals = (r?.values ?? []) as IDataObject[];
@@ -917,6 +957,7 @@ export class CiviCrm implements INodeType {
 					'POST',
 					`/civicrm/ajax/api4/${customEntity}/${action}`,
 					params,
+					runtimeBearerToken,
 				);
 
 				// Return the raw API4 response so advanced users can work with values and metadata
@@ -978,6 +1019,7 @@ export class CiviCrm implements INodeType {
 					'POST',
 					`/civicrm/ajax/api4/${entity}/get`,
 					params,
+					runtimeBearerToken,
 				);
 
 				out.push({
@@ -1047,6 +1089,7 @@ export class CiviCrm implements INodeType {
 							'POST',
 							`/civicrm/ajax/api4/${entity}/get`,
 							{ ...params, limit: page, offset },
+							runtimeBearerToken,
 						);
 
 						const vals = r?.values ?? [];
@@ -1069,6 +1112,7 @@ export class CiviCrm implements INodeType {
 						'POST',
 						`/civicrm/ajax/api4/${entity}/get`,
 						{ ...params, limit },
+						runtimeBearerToken,
 					);
 
 					const vals = r?.values ?? [];
