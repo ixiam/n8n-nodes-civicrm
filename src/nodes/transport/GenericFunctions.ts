@@ -149,7 +149,6 @@ export async function civicrmApiRequest(
       if (jwtToken) {
         useJwt = true;
       } else {
-        console.warn('[CiviCRM] JWT generation returned no token, falling back to API key');
         this.addExecutionHints({
           message: 'JWT authentication could not be obtained (no token returned by CiviCRM). Falling back to API Key authentication.',
           type: 'warning',
@@ -158,7 +157,6 @@ export async function civicrmApiRequest(
       }
     } catch (error) {
       const errorMsg = getHttpErrorDetails(error);
-      console.warn(`[CiviCRM] JWT generation failed: ${errorMsg}. Falling back to API key.`);
       this.addExecutionHints({
         message: `JWT authentication failed (${errorMsg}). Falling back to API Key authentication.`,
         type: 'warning',
@@ -188,9 +186,6 @@ export async function civicrmApiRequest(
       if (hasData) {
         return response;
       } else {
-        console.warn(
-          '[CiviCRM] JWT returned empty response. Retrying with API key (JWT may have limited permissions).'
-        );
         this.addExecutionHints({
           message: 'The JWT-authenticated request returned no data (JWT may have limited permissions). Retrying with API Key authentication.',
           type: 'warning',
@@ -200,7 +195,6 @@ export async function civicrmApiRequest(
       }
     } catch (error: unknown) {
       const errorMsg = getHttpErrorDetails(error);
-      console.warn('[CiviCRM] JWT request failed. Retrying with API key.');
       this.addExecutionHints({
         message: `The JWT-authenticated request failed (${errorMsg}). Retrying with API Key authentication.`,
         type: 'warning',
@@ -223,11 +217,7 @@ export async function civicrmApiRequest(
   };
 
   try {
-    const response = await this.helpers.httpRequest.call(this, apiKeyOptions);
-    if (useJwt && jwtToken) {
-      console.log('[CiviCRM] API key request successful (JWT was insufficient, using API key as fallback)');
-    }
-    return response;
+    return await this.helpers.httpRequest.call(this, apiKeyOptions);
   } catch (error: unknown) {
     throw new NodeApiError(this.getNode(), error as JsonObject);
   }

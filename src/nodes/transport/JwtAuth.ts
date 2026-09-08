@@ -13,36 +13,6 @@ export function isJwtAuthEnabled(credentials: any): boolean {
 }
 
 /**
- * Extracts a readable message from an HTTP error, including the response body
- * (e.g. CiviCRM's "Login not permitted. Must satisfy guard (perm, site_key)."),
- * which the bare `error.message` (e.g. "Request failed with status code 401")
- * does not include.
- */
-function getErrorDetails(error: unknown): string {
-	const errorObj = error as {
-		message?: string;
-		response?: { status?: number; data?: unknown };
-	};
-
-	const status = errorObj?.response?.status;
-	const data = errorObj?.response?.data;
-	const message = errorObj?.message ?? String(error);
-
-	const body =
-		typeof data === 'string' && data.trim()
-			? data
-			: data && typeof data === 'object'
-				? JSON.stringify(data)
-				: undefined;
-
-	if (body) {
-		return status ? `${message} | HTTP ${status} body: ${body}` : `${message} | body: ${body}`;
-	}
-
-	return status ? `${message} | HTTP ${status}` : message;
-}
-
-/**
  * Resolve the current authenticated user's contact ID from Contact/get.
  * Finds the contact that owns the given api_key.
  * Cached to avoid repeated lookups.
@@ -78,20 +48,13 @@ export async function resolveContactId(
 
 		const contacts = (response as { values?: Array<{ id: number }> })?.values || [];
 		if (contacts.length === 0) {
-			console.warn(
-				'[CiviCRM] Contact/get found no contact with this api_key - JWT auto-resolve will be skipped',
-			);
 			return undefined;
 		}
 
 		const contactId = contacts[0].id;
 		contactIdCache[cacheKey] = contactId;
 		return contactId;
-	} catch (error) {
-		const errorMsg = getErrorDetails(error);
-		console.warn(
-			`[CiviCRM] Failed to auto-resolve contact ID: ${errorMsg}. Will attempt API key fallback.`,
-		);
+	} catch {
 		return undefined;
 	}
 }
@@ -148,7 +111,6 @@ export async function getServerIssuedJwt(
 
 		const cred = (response as { values?: Array<{ cred: string }> })?.values?.[0]?.cred || '';
 		if (!cred.startsWith('Bearer ')) {
-			console.warn('[CiviCRM] Invalid JWT response: missing Bearer token');
 			return undefined;
 		}
 
@@ -156,24 +118,9 @@ export async function getServerIssuedJwt(
 		serverIssuedCache[cacheKey] = { token, expiresAt: now + ttl * 1000 };
 
 		return token;
-	} catch (error) {
-		const errorMsg = getErrorDetails(error);
-		const isPermissionDenied =
-			errorMsg.includes('Authorization failed') ||
-			errorMsg.includes('403') ||
-			errorMsg.includes('Permission denied') ||
-			errorMsg.includes('Login not permitted') ||
-			errorMsg.includes('Must satisfy guard');
-
-		if (isPermissionDenied) {
-			// User lacks permissions for JWT. Fall back to API key auth.
-			console.warn(
-				`[CiviCRM JWT] User lacks permissions for AuthxCredential/create (${errorMsg}). Will use API key authentication instead.`,
-			);
-			return undefined;
-		}
-
-		console.warn(`[CiviCRM JWT] Failed to obtain JWT: ${errorMsg}. Falling back to API key.`);
+	} catch {
+		// Any failure here (permission denied, network error, malformed response) falls
+		// back to API key auth in the caller -- see GenericFunctions.civicrmApiRequest.
 		return undefined;
 	}
 }
