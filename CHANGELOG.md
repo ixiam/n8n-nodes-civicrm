@@ -4,6 +4,16 @@ All notable changes to `@ixiam/n8n-nodes-civicrm` are documented here.
 
 ---
 
+## [3.2.0] — 2026-09-08
+
+### Added
+- **`Runtime Bearer Token (Optional)`** node parameter (Get, Get Many, and all three Custom API Call operations). Accepts a JWT already issued for a specific real CiviCRM contact (e.g. an Authx JWT minted by another system for a logged-in end user), typically set by expression (`={{ $json.user_jwt }}`). When set, it's used exactly as given as the `Authorization: Bearer` header for that call, entirely bypassing the credential's own JWT auto-resolve and API-key fallback. An empty or denied CiviCRM response in this mode is returned/thrown as-is - it is **not** retried with the credential's API key, because a denial is the correct outcome of a real permission check for that specific user, not a failure to compensate for. Built for per-user permission enforcement in multi-tenant workflows (each execution can act as a different real CiviCRM identity instead of a single shared credential).
+
+### Changed
+- Shortened the node's top-level `description` (shown in n8n's node picker) to a single sentence, consistent with other community nodes.
+
+---
+
 ## [3.1.0] — 2026-09-04
 
 ### Added
