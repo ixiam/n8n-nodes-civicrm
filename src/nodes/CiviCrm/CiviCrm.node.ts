@@ -13,7 +13,7 @@ import {
 	civicrmApiRequest,
 	buildCiviAuthHeaders,
 } from '../transport/GenericFunctions';
-import { resourceProp, operationProp } from './descriptions/resources';
+import { resourceProp, operationProp, customApiOperationProp } from './descriptions/resources';
 import { genericFields, upsertFields } from './descriptions/generic';
 
 /* ============================================================================
@@ -89,13 +89,9 @@ export class CiviCrm implements INodeType {
 		icon: 'file:civicrm.svg',
 		group: ['transform'],
 		version: 1,
-		description:
-			'Interact with CiviCRM API v4 (Civi-Go compatible).\n\n' +
-			'Supports Contact, Membership, Group, Relationship, Activity entities, and Custom API Call.\n' +
-			'Includes dynamic mapping of email, phone, address and location types.\n' +
-			'Includes birth_date validation and JSON filters for GET MANY.\n',
+		description: 'Interact with CiviCRM API v4 to manage contacts, memberships, groups, and more.',
 		defaults: { name: 'CiviCRM' },
-		subtitle: '={{{"get":"Get","getMany":"Get Many","create":"Create","update":"Update","delete":"Delete"}[$parameter["operation"]] + ": " + {"contact":"Contact","membership":"Membership","group":"Group","relationship":"Relationship","activity":"Activity","customApi":"Custom API Call"}[$parameter["resource"]]}}',
+		subtitle: '={{{"get":"Get","getMany":"Get Many","create":"Create","update":"Update","delete":"Delete","raw":"Raw API Call","getFields":"List Fields","search":"Dynamic Search"}[$parameter["operation"]] + ": " + {"contact":"Contact","membership":"Membership","group":"Group","relationship":"Relationship","activity":"Activity","customApi":"Custom API Call"}[$parameter["resource"]]}}',
 		inputs: [NodeConnectionTypes.Main],
 		outputs: [NodeConnectionTypes.Main],
 
@@ -444,6 +440,70 @@ export class CiviCrm implements INodeType {
 					},
 				],
 			},
+
+			// ======================================================================
+			// CUSTOM API — LIST FIELDS / DYNAMIC SEARCH
+			// ======================================================================
+			{
+				displayName: 'List Fields (Any Entity)',
+				name: 'customApiGetFields',
+				action: 'List fields for any CiviCRM entity',
+				description:
+					'Call {Entity}/getFields on any CiviCRM APIv4 entity (Contact, Contribution, Event, Case, custom entities, etc.) and return field metadata (name, type, required, options...) as node output. Run this before a Dynamic Search or Custom API Call for an entity/field you have not verified yet on this installation.',
+				displayOptions: { show: { resource: ['customApi'], operation: ['getFields'] } },
+				properties: [
+					{
+						displayName: 'Action Context',
+						name: 'getFieldsAction',
+						type: 'string',
+						default: 'get',
+						description:
+							'CiviCRM action context passed to getFields (e.g. get, create, update). Affects which fields are reported as required/readonly for that context.',
+					},
+				],
+			},
+			{
+				displayName: 'Dynamic Search (Any Entity)',
+				name: 'customApiSearch',
+				action: 'Run a dynamic search on any CiviCRM entity',
+				description:
+					'Run {Entity}/get with a configurable Select and Where for any CiviCRM APIv4 entity, not limited to Contact/Membership/Group/Relationship/Activity. Verify field names first with List Fields (Any Entity).',
+				displayOptions: { show: { resource: ['customApi'], operation: ['search'] } },
+				properties: [
+					{
+						displayName: 'Select (JSON)',
+						name: 'searchSelectJson',
+						type: 'string',
+						default: '["id"]',
+						placeholder: '["id","display_name","custom_12"]',
+						description: 'JSON array of field names to return, verified beforehand via getFields.',
+					},
+					{
+						displayName: 'Where (JSON)',
+						name: 'searchWhereJson',
+						type: 'string',
+						default: '',
+						placeholder: '[["city","=","Bilbao"]]',
+						description:
+							"JSON array of [field, operator, value] triples, same pattern as Get Many's Where (JSON).",
+					},
+					{
+						displayName: 'Return All',
+						name: 'searchReturnAll',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to return all results or only up to a given limit.',
+					},
+					{
+						displayName: 'Limit',
+						name: 'searchLimit',
+						type: 'number',
+						typeOptions: { minValue: 1, maxValue: 1000 },
+						default: 100,
+						description: 'Max number of results to return. Defaults to 100.',
+					},
+				],
+			},
 		],
 		credentials: [{ name: 'civiCrmApi', required: true }],
 
@@ -453,6 +513,7 @@ export class CiviCrm implements INodeType {
 			//
 			resourceProp,
 			operationProp,
+			customApiOperationProp,
 
 			//
 			// CONTACT TYPE
@@ -593,7 +654,15 @@ export class CiviCrm implements INodeType {
 				required: true,
 				description:
 					'CiviCRM API4 action, for example get, getFields, create, update, delete, getOne, etc.',
-				displayOptions: { show: { resource: ['customApi'] } },
+				// Also shown for the legacy operation values a customApi node saved
+				// before `customApiOperationProp` existed may still carry (see that
+				// prop's comments) - execute() treats all of them as the raw path.
+				displayOptions: {
+					show: {
+						resource: ['customApi'],
+						operation: ['raw', 'get', 'getMany', 'create', 'update', 'delete'],
+					},
+				},
 			},
 			{
 				displayName: 'Params (JSON)',
@@ -605,7 +674,93 @@ export class CiviCrm implements INodeType {
 				default: '{\n  "limit": 25\n}',
 				description:
 					'Raw API4 params JSON passed as-is to CiviCRM. It must be a valid JSON object (no trailing commas).',
-				displayOptions: { show: { resource: ['customApi'] } },
+				displayOptions: {
+					show: {
+						resource: ['customApi'],
+						operation: ['raw', 'get', 'getMany', 'create', 'update', 'delete'],
+					},
+				},
+			},
+
+			//
+			// CUSTOM API — LIST FIELDS (ANY ENTITY)
+			//
+			{
+				displayName: 'Action Context',
+				name: 'getFieldsAction',
+				type: 'string',
+				default: 'get',
+				description:
+					'CiviCRM action context passed to getFields (e.g. get, create, update). Affects which fields are reported as required/readonly for that context.',
+				displayOptions: { show: { resource: ['customApi'], operation: ['getFields'] } },
+			},
+
+			//
+			// CUSTOM API — DYNAMIC SEARCH (ANY ENTITY)
+			//
+			{
+				displayName: 'Select (JSON)',
+				name: 'searchSelectJson',
+				type: 'string',
+				default: '["id"]',
+				placeholder: '["id","display_name","custom_12"]',
+				description: 'JSON array of field names to return, verified beforehand via getFields.',
+				displayOptions: { show: { resource: ['customApi'], operation: ['search'] } },
+			},
+			{
+				displayName: 'Where (JSON)',
+				name: 'searchWhereJson',
+				type: 'string',
+				default: '',
+				placeholder: '[["city","=","Bilbao"]]',
+				description: "JSON array of [field, operator, value] triples, same pattern as Get Many's Where (JSON).",
+				displayOptions: { show: { resource: ['customApi'], operation: ['search'] } },
+			},
+			{
+				displayName: 'Return All',
+				name: 'searchReturnAll',
+				type: 'boolean',
+				default: false,
+				description: 'Whether to return all results or only up to a given limit.',
+				displayOptions: { show: { resource: ['customApi'], operation: ['search'] } },
+			},
+			{
+				displayName: 'Limit',
+				name: 'searchLimit',
+				type: 'number',
+				typeOptions: { minValue: 1, maxValue: 1000 },
+				default: 100,
+				description: 'Max number of results to return. Defaults to 100.',
+				displayOptions: {
+					show: { resource: ['customApi'], operation: ['search'], searchReturnAll: [false] },
+				},
+			},
+
+			//
+			// RUNTIME BEARER TOKEN (per-execution JWT, e.g. Authx JWT of the real
+			// logged-in CiviCRM user - see GenericFunctions.civicrmApiRequest)
+			//
+			{
+				displayName: 'Runtime Bearer Token (Optional)',
+				name: 'runtimeBearerToken',
+				type: 'string',
+				typeOptions: { password: true },
+				default: '',
+				description:
+					'A JWT already issued for a specific real user (e.g. a CiviCRM Authx JWT minted by ' +
+					'Drupal for the logged-in contact), usually set by expression such as ' +
+					'={{ $json.user_jwt }}. If set, it is used exactly as given as the ' +
+					'"Authorization: Bearer" header for this call, bypassing this node\'s ' +
+					"credential-based JWT auto-resolve and API key entirely. If the CiviCRM response " +
+					'is empty or an error with this token, it is returned/thrown as-is - the node does ' +
+					'NOT retry with the credential\'s API key, because an empty result is what a correct ' +
+					"permission check looks like when this user lacks access, not a failure to compensate " +
+					'for. Leave empty to use the credential (JWT auto-resolve or API key) as before.',
+				displayOptions: {
+					show: {
+						operation: ['get', 'getMany', 'getFields', 'search', 'raw'],
+					},
+				},
 			},
 
 			//
@@ -661,9 +816,125 @@ export class CiviCrm implements INodeType {
 
 		for (let i = 0; i < items.length; i++) {
 			try {
-			// Custom API call: generic passthrough to any API4 entity/action
+			// Per-execution JWT for a specific real user (issue #25 - permissions
+			// by real user via Authx), read once per item so it can come from an
+			// expression like ={{ $json.user_jwt }}. Only threaded into the
+			// read-only operations this parameter is exposed for (get/getMany/
+			// getFields/search/raw Custom API Call) - see civicrmApiRequest for
+			// why an empty result with this token must never fall back to the
+			// credential's API key.
+			const runtimeBearerToken =
+				(this.getNodeParameter('runtimeBearerToken', i, '') as string).trim() || undefined;
+
+			// Custom API resource: raw passthrough, plus first-class List Fields /
+			// Dynamic Search operations for any API4 entity (not just the 5 fixed
+			// resources above).
 			if (resource === 'customApi') {
 				const customEntity = this.getNodeParameter('customEntity', i) as string;
+				// Any value other than 'getFields'/'search' (including the new
+				// 'raw' default and every legacy value the shared operationProp
+				// used to allow here) resolves to the original raw passthrough.
+				const customOperation = this.getNodeParameter('operation', i, 'raw') as string;
+
+				/* --------------------------------------------------------
+				   LIST FIELDS: {Entity}/getFields
+				-------------------------------------------------------- */
+				if (customOperation === 'getFields') {
+					const actionContext = this.getNodeParameter('getFieldsAction', i, 'get') as string;
+
+					const res = await civicrmApiRequest.call(
+						this,
+						'POST',
+						`/civicrm/ajax/api4/${customEntity}/getFields`,
+						{ action: actionContext, loadOptions: true },
+						runtimeBearerToken,
+					);
+
+					const vals = (res?.values ?? []) as IDataObject[];
+					if (Array.isArray(vals) && vals.length) {
+						for (const v of vals) {
+							out.push({ json: v, pairedItem: { item: i } });
+						}
+					} else {
+						out.push({ json: (res as IDataObject) ?? {}, pairedItem: { item: i } });
+					}
+
+					continue;
+				}
+
+				/* --------------------------------------------------------
+				   DYNAMIC SEARCH: {Entity}/get with configurable select/where
+				-------------------------------------------------------- */
+				if (customOperation === 'search') {
+					const selectJson = this.getNodeParameter('searchSelectJson', i, '["id"]') as string;
+					const whereJson = this.getNodeParameter('searchWhereJson', i, '') as string;
+					const returnAll = this.getNodeParameter('searchReturnAll', i, false) as boolean;
+					const limit = this.getNodeParameter('searchLimit', i, 100) as number;
+
+					let select: string[] = ['id'];
+					if (selectJson) {
+						try {
+							select = JSON.parse(selectJson);
+						} catch (error) {
+							throw new Error('Invalid JSON in "Select (JSON)"');
+						}
+					}
+
+					let where: any[] = [];
+					if (whereJson) {
+						try {
+							where = JSON.parse(whereJson);
+						} catch (error) {
+							throw new Error('Invalid JSON in "Where (JSON)"');
+						}
+					}
+
+					if (returnAll) {
+						let offset = 0;
+						const page = 500;
+						let hasMore = true;
+
+						while (hasMore) {
+							const r = await civicrmApiRequest.call(
+								this,
+								'POST',
+								`/civicrm/ajax/api4/${customEntity}/get`,
+								{ select, where, limit: page, offset },
+								runtimeBearerToken,
+							);
+
+							const vals = (r?.values ?? []) as IDataObject[];
+							for (const v of vals) {
+								out.push({ json: v, pairedItem: { item: i } });
+							}
+
+							if (vals.length < page) {
+								hasMore = false;
+							} else {
+								offset += page;
+							}
+						}
+					} else {
+						const r = await civicrmApiRequest.call(
+							this,
+							'POST',
+							`/civicrm/ajax/api4/${customEntity}/get`,
+							{ select, where, limit },
+							runtimeBearerToken,
+						);
+
+						const vals = (r?.values ?? []) as IDataObject[];
+						for (const v of vals) {
+							out.push({ json: v, pairedItem: { item: i } });
+						}
+					}
+
+					continue;
+				}
+
+				/* --------------------------------------------------------
+				   RAW API CALL (original behavior, unchanged)
+				-------------------------------------------------------- */
 				const action = this.getNodeParameter('customAction', i) as string;
 				const paramsJson = this.getNodeParameter('customParamsJson', i, '') as string;
 
@@ -681,6 +952,7 @@ export class CiviCrm implements INodeType {
 					'POST',
 					`/civicrm/ajax/api4/${customEntity}/${action}`,
 					params,
+					runtimeBearerToken,
 				);
 
 				// Return the raw API4 response so advanced users can work with values and metadata
@@ -742,6 +1014,7 @@ export class CiviCrm implements INodeType {
 					'POST',
 					`/civicrm/ajax/api4/${entity}/get`,
 					params,
+					runtimeBearerToken,
 				);
 
 				out.push({
@@ -811,6 +1084,7 @@ export class CiviCrm implements INodeType {
 							'POST',
 							`/civicrm/ajax/api4/${entity}/get`,
 							{ ...params, limit: page, offset },
+							runtimeBearerToken,
 						);
 
 						const vals = r?.values ?? [];
@@ -833,6 +1107,7 @@ export class CiviCrm implements INodeType {
 						'POST',
 						`/civicrm/ajax/api4/${entity}/get`,
 						{ ...params, limit },
+						runtimeBearerToken,
 					);
 
 					const vals = r?.values ?? [];
