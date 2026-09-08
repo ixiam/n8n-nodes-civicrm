@@ -4,6 +4,17 @@ All notable changes to `@ixiam/n8n-nodes-civicrm` are documented here.
 
 ---
 
+## [3.2.1] — 2026-09-08
+
+### Fixed
+- **[HIGH]** Removed `jsonwebtoken` from `dependencies` — community node packages must not carry runtime dependencies (they install at the n8n-instance level and can conflict with the runtime or other nodes). It was never actually imported anywhere in the source (CiviCRM JWTs come from the `AuthxCredential.create` API, not local signing); `@types/jsonwebtoken` (a leftover devDependency for the same unused package) removed too.
+- **[MEDIUM]** Removed all `console.warn`/`console.log` calls from `GenericFunctions.ts` and `JwtAuth.ts` — community nodes must not write to console. The JWT-fallback diagnostics were already duplicated via `this.addExecutionHints(...)`, which is the correct n8n-native mechanism and remains in place; a leftover success-path `console.log` with no execution-hint equivalent was dropped outright (informational only, not needed for correctness). This also left `JwtAuth.ts`'s `getErrorDetails()` helper and an `isPermissionDenied` branch dead (both existed only to feed the removed log messages) — removed rather than left unused.
+- **[LOW]** Removed the unused `INodePropertyOptions` type import in `CiviCrm.node.ts`.
+
+Flagged by the n8n community package review of the v3.0.0 submission (`npx @n8n/scan-community-package`); verified fixed locally with the same tool plus `npx @n8n/node-cli lint` and the existing 14-test suite before publishing.
+
+---
+
 ## [3.2.0] — 2026-09-08
 
 ### Added

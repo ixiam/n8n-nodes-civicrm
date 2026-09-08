@@ -1,6 +1,6 @@
 {
   "name": "@ixiam/n8n-nodes-civicrm",
-  "version": "3.2.0",
+  "version": "3.2.1",
   "description": "Full-featured CiviCRM API v4 integration for n8n",
   "license": "MIT",
   "keywords": [
@@ -52,7 +52,6 @@
   "devDependencies": {
     "@n8n/node-cli": "^0.23.1",
     "@types/jest": "^30.0.0",
-    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20.11.30",
     "eslint": "9.32.0",
     "jest": "^30.5.1",
@@ -61,9 +60,7 @@
     "ts-jest": "^29.4.12",
     "typescript": "5.9.2"
   },
-  "dependencies": {
-    "jsonwebtoken": "^9.0.3"
-  },
+  "dependencies": {},
   "peerDependencies": {
     "n8n-workflow": "*"
   },
