@@ -255,4 +255,159 @@ describe("CiviCRM Node (n8n validation tests)", () => {
 			await expect(node.execute.call(ctx)).rejects.toThrow('Invalid JSON in "Select (JSON)"');
 		});
 	});
+
+	// Issue #25: per-user permissions via a runtime-supplied Authx JWT.
+	// `runtimeBearerToken` must be used exactly as given (Authorization: Bearer)
+	// with none of the credential-based JWT auto-resolve/API key logic - and an
+	// empty/denied result with it must never trigger the API-key fallback that
+	// exists for the credential-based path.
+	describe("Runtime Bearer Token (issue #25 - per-user JWT)", () => {
+		test("Dynamic Search: uses the runtime JWT as-is (Authorization: Bearer) and never touches the credential's API key", async () => {
+			const node = new CiviCrm();
+
+			const ctx = mockExecuteContext(
+				[{ json: {} }],
+				{
+					resource: "customApi",
+					operation: "search",
+					customEntity: "Contribution",
+					searchSelectJson: '["id","total_amount"]',
+					searchWhereJson: "[]",
+					searchReturnAll: false,
+					searchLimit: 50,
+					runtimeBearerToken: "runtime.jwt.for.contact-49",
+				},
+				[{ values: [{ id: 1, total_amount: 10 }] }],
+			);
+
+			await node.execute.call(ctx);
+
+			expect(ctx.helpers.httpRequest as jest.Mock).toHaveBeenCalledTimes(1);
+			const call = (ctx.helpers.httpRequest as jest.Mock).mock.calls[0][0];
+			expect(call.url).toBe("https://mock/civicrm/ajax/api4/Contribution/get");
+			expect(call.headers.Authorization).toBe("Bearer runtime.jwt.for.contact-49");
+			// No API key header at all in this mode - not even alongside the JWT.
+			expect(call.headers["X-Civi-Auth"]).toBeUndefined();
+		});
+
+		test("Custom API Call (raw): uses the runtime JWT as-is instead of the credential", async () => {
+			const node = new CiviCrm();
+
+			const ctx = mockExecuteContext(
+				[{ json: {} }],
+				{
+					resource: "customApi",
+					operation: "raw",
+					customEntity: "Contribution",
+					customAction: "get",
+					customParamsJson: '{"limit": 5}',
+					runtimeBearerToken: "runtime.jwt.for.contact-49",
+				},
+				[{ values: [], count: 0 }],
+			);
+
+			await node.execute.call(ctx);
+
+			const call = (ctx.helpers.httpRequest as jest.Mock).mock.calls[0][0];
+			expect(call.headers.Authorization).toBe("Bearer runtime.jwt.for.contact-49");
+			expect(call.headers["X-Civi-Auth"]).toBeUndefined();
+		});
+
+		test("empty response with a runtime JWT is returned as-is - NOT retried with the API key", async () => {
+			const node = new CiviCrm();
+
+			const ctx = mockExecuteContext(
+				[{ json: {} }],
+				{
+					resource: "customApi",
+					operation: "raw",
+					customEntity: "Contribution",
+					customAction: "get",
+					customParamsJson: "{}",
+					runtimeBearerToken: "runtime.jwt.for.contact-49",
+				},
+				// Only one response queued: if the node retried, the mock would
+				// just replay this same (empty) response again, so asserting the
+				// call count is what actually proves no retry happened.
+				[{ values: [], count: 0 }],
+			);
+
+			const result = await node.execute.call(ctx);
+
+			expect(ctx.helpers.httpRequest as jest.Mock).toHaveBeenCalledTimes(1);
+			expect(result[0][0].json).toEqual({ values: [], count: 0 });
+		});
+
+		test("an error with a runtime JWT is thrown as-is - NOT retried with the API key", async () => {
+			const node = new CiviCrm();
+
+			const ctx = mockExecuteContext(
+				[{ json: {} }],
+				{
+					resource: "customApi",
+					operation: "raw",
+					customEntity: "Contribution",
+					customAction: "get",
+					customParamsJson: "{}",
+					runtimeBearerToken: "runtime.jwt.for.contact-49",
+				},
+			);
+			(ctx.helpers.httpRequest as jest.Mock).mockRejectedValueOnce(
+				Object.assign(new Error("Request failed with status code 403"), {
+					response: { status: 403, data: { error_message: "Permission denied" } },
+				}),
+			);
+
+			await expect(node.execute.call(ctx)).rejects.toThrow();
+			expect(ctx.helpers.httpRequest as jest.Mock).toHaveBeenCalledTimes(1);
+		});
+
+		test("without the parameter, behavior is unchanged (regression): falls back to the credential's API key header as before", async () => {
+			const node = new CiviCrm();
+
+			const ctx = mockExecuteContext(
+				[{ json: {} }],
+				{
+					resource: "customApi",
+					operation: "raw",
+					customEntity: "Contribution",
+					customAction: "get",
+					customParamsJson: "{}",
+					// runtimeBearerToken intentionally omitted
+				},
+				[{ values: [{ id: 42 }], count: 1 }],
+			);
+
+			await node.execute.call(ctx);
+
+			const call = (ctx.helpers.httpRequest as jest.Mock).mock.calls[0][0];
+			// Mock credentials have no enableJwtAuth, so this is the pre-existing
+			// API key path (X-Civi-Auth), completely untouched by this feature.
+			expect(call.headers["X-Civi-Auth"]).toBe("Bearer 123");
+			expect(call.headers.Authorization).toBeUndefined();
+		});
+
+		test("a blank/whitespace-only runtime token is treated as not provided (falls back to credential, no empty Authorization header)", async () => {
+			const node = new CiviCrm();
+
+			const ctx = mockExecuteContext(
+				[{ json: {} }],
+				{
+					resource: "customApi",
+					operation: "raw",
+					customEntity: "Contribution",
+					customAction: "get",
+					customParamsJson: "{}",
+					runtimeBearerToken: "   ",
+				},
+				[{ values: [{ id: 42 }], count: 1 }],
+			);
+
+			await node.execute.call(ctx);
+
+			const call = (ctx.helpers.httpRequest as jest.Mock).mock.calls[0][0];
+			expect(call.headers["X-Civi-Auth"]).toBe("Bearer 123");
+			expect(call.headers.Authorization).toBeUndefined();
+		});
+	});
 });
