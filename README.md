@@ -76,11 +76,14 @@ Time-bounded tokens for enhanced security. **Contact ID is automatically resolve
 
 > **Note on warnings vs. results:** When JWT auth is enabled but the token can't be obtained (e.g. AuthX disabled or misconfigured on the CiviCRM side), the node still returns data — it silently retries the same request with the API Key. You'll see a **warning in the node's output pane** explaining why JWT wasn't used, but the workflow does not fail and the query results are still shown. This is intentional: JWT failures never break a workflow, they only fall back to API Key auth and surface a non-blocking warning.
 
+> **Troubleshooting "JWT authentication could not be obtained (no token returned by CiviCRM)":** This message covers several distinct failures on the CiviCRM side (Contact lookup by API Key failed, or `AuthxCredential.create` was denied), so it doesn't say which one occurred. The most common cause is a missing permission: the Contact that owns the API Key must have the **"AuthX: Generate new JWT credentials for other users via the API"** permission on their role — see [JWT Setup Requirements](#jwt-setup-requirements) above. To confirm which step is failing, call `Contact.get` (filtered by `api_key`) and `AuthxCredential.create` directly against your CiviCRM instance and check the HTTP status/response of each.
+
 #### JWT Setup Requirements
 
 **CiviCRM Extensions & Settings:**
 - ✓ AuthX extension enabled (CiviCRM 5.48+)
 - ✓ API Key assigned to a Contact record
+- ✓ The Contact's role has the **"AuthX: Generate new JWT credentials for other users via the API"** permission (`generate any authx credential`) — under **Administer → Users and Permissions → Permissions**. Without it, `AuthxCredential.create` returns `403 Authorization failed` and the node silently falls back to API Key auth. Note that having "Administrator"/`administer CiviCRM` does **not** grant this by itself — it must be checked explicitly for the role.
 
 **CiviCRM Authentication Configuration**
 
