@@ -757,7 +757,7 @@ export class CiviCrm implements INodeType {
 					'for. Leave empty to use the credential (JWT auto-resolve or API key) as before.',
 				displayOptions: {
 					show: {
-						operation: ['get', 'getMany', 'getFields', 'search', 'raw'],
+						operation: ['get', 'getMany', 'getFields', 'search', 'raw', 'create', 'update', 'delete'],
 					},
 				},
 			},
@@ -817,11 +817,16 @@ export class CiviCrm implements INodeType {
 			try {
 			// Per-execution JWT for a specific real user (issue #25 - permissions
 			// by real user via Authx), read once per item so it can come from an
-			// expression like ={{ $json.user_jwt }}. Only threaded into the
-			// read-only operations this parameter is exposed for (get/getMany/
-			// getFields/search/raw Custom API Call) - see civicrmApiRequest for
-			// why an empty result with this token must never fall back to the
-			// credential's API key.
+			// expression like ={{ $json.user_jwt }}. Threaded into every
+			// operation this parameter is exposed for - get/getMany/getFields/
+			// search/raw Custom API Call, and (issue #30 fix) the fixed-resource
+			// create/update/delete branches for Contact/Membership/Group/
+			// Relationship/Activity below - see civicrmApiRequest for why an
+			// empty result with this token must never fall back to the
+			// credential's API key. Without this, a write always ran as the
+			// client's admin credential regardless of the real logged-in user's
+			// actual CiviCRM permissions, defeating the point of issue #25 for
+			// every write operation.
 			const runtimeBearerToken =
 				(this.getNodeParameter('runtimeBearerToken', i, '') as string).trim() || undefined;
 
@@ -1134,6 +1139,7 @@ export class CiviCrm implements INodeType {
 					{
 						where: [['id', '=', id]],
 					},
+					runtimeBearerToken,
 				);
 
 				out.push({
@@ -1290,8 +1296,9 @@ export class CiviCrm implements INodeType {
 				const r = await civicrmApiRequest.call(
 					this,
 					'POST',
-					'/civicrm/ajax/api4/Contact/create',
+					`/civicrm/ajax/api4/${entity}/create`,
 					{ values },
+					runtimeBearerToken,
 				);
 				contactId = r?.values?.[0]?.id;
 				if (!contactId) throw new Error('Failed to create contact.');
@@ -1304,6 +1311,7 @@ export class CiviCrm implements INodeType {
 						values,
 						where: [['id', '=', contactId]],
 					},
+					runtimeBearerToken,
 				);
 			}
 
@@ -1315,7 +1323,7 @@ export class CiviCrm implements INodeType {
 							['contact_id', '=', contactId],
 							['is_primary', '=', true],
 						],
-					});
+					}, runtimeBearerToken);
 				}
 				if (isCreate && isPrimaryPhone) {
 					await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/Phone/delete', {
@@ -1323,7 +1331,7 @@ export class CiviCrm implements INodeType {
 							['contact_id', '=', contactId],
 							['is_primary', '=', true],
 						],
-					});
+					}, runtimeBearerToken);
 				}
 				if (isCreate && isPrimaryAddress) {
 					await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/Address/delete', {
@@ -1331,7 +1339,7 @@ export class CiviCrm implements INodeType {
 							['contact_id', '=', contactId],
 							['is_primary', '=', true],
 						],
-					});
+					}, runtimeBearerToken);
 				}
 
 				if (Object.keys(emailData).length) {
@@ -1343,7 +1351,7 @@ export class CiviCrm implements INodeType {
 								is_primary: isPrimaryEmail,
 								'location_type_id:name': emailLocationName,
 							},
-						});
+						}, runtimeBearerToken);
 					} else {
 						const existingEmail = await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/Email/get', {
 							where: [
@@ -1352,7 +1360,7 @@ export class CiviCrm implements INodeType {
 							],
 							limit: 1,
 							select: ['id'],
-						});
+						}, runtimeBearerToken);
 						const existingEmailId = existingEmail?.values?.[0]?.id as number | undefined;
 						if (existingEmailId) {
 							await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/Email/update', {
@@ -1362,7 +1370,7 @@ export class CiviCrm implements INodeType {
 									contact_id: contactId,
 									is_primary: isPrimaryEmail,
 								},
-							});
+							}, runtimeBearerToken);
 						} else {
 							await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/Email/create', {
 								values: {
@@ -1371,7 +1379,7 @@ export class CiviCrm implements INodeType {
 									is_primary: isPrimaryEmail,
 									'location_type_id:name': emailLocationName,
 								},
-							});
+							}, runtimeBearerToken);
 						}
 					}
 				}
@@ -1385,7 +1393,7 @@ export class CiviCrm implements INodeType {
 								is_primary: isPrimaryPhone,
 								'location_type_id:name': phoneLocationName,
 							},
-						});
+						}, runtimeBearerToken);
 					} else {
 						const existingPhone = await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/Phone/get', {
 							where: [
@@ -1394,7 +1402,7 @@ export class CiviCrm implements INodeType {
 							],
 							limit: 1,
 							select: ['id'],
-						});
+						}, runtimeBearerToken);
 						const existingPhoneId = existingPhone?.values?.[0]?.id as number | undefined;
 						if (existingPhoneId) {
 							await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/Phone/update', {
@@ -1404,7 +1412,7 @@ export class CiviCrm implements INodeType {
 									contact_id: contactId,
 									is_primary: isPrimaryPhone,
 								},
-							});
+							}, runtimeBearerToken);
 						} else {
 							await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/Phone/create', {
 								values: {
@@ -1413,7 +1421,7 @@ export class CiviCrm implements INodeType {
 									is_primary: isPrimaryPhone,
 									'location_type_id:name': phoneLocationName,
 								},
-							});
+							}, runtimeBearerToken);
 						}
 					}
 				}
@@ -1428,7 +1436,7 @@ export class CiviCrm implements INodeType {
 								is_primary: isPrimaryAddress,
 								'location_type_id:name': addressLocationName,
 							},
-						});
+						}, runtimeBearerToken);
 					} else {
 						const existingAddress = await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/Address/get', {
 							where: [
@@ -1437,7 +1445,7 @@ export class CiviCrm implements INodeType {
 							],
 							limit: 1,
 							select: ['id'],
-						});
+						}, runtimeBearerToken);
 						const existingAddressId = existingAddress?.values?.[0]?.id as number | undefined;
 						if (existingAddressId) {
 							await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/Address/update', {
@@ -1447,7 +1455,7 @@ export class CiviCrm implements INodeType {
 									contact_id: contactId,
 									is_primary: isPrimaryAddress,
 								},
-							});
+							}, runtimeBearerToken);
 						} else {
 							await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/Address/create', {
 								values: {
@@ -1456,7 +1464,7 @@ export class CiviCrm implements INodeType {
 									is_primary: isPrimaryAddress,
 									'location_type_id:name': addressLocationName,
 								},
-							});
+							}, runtimeBearerToken);
 						}
 					}
 				}
@@ -1491,6 +1499,7 @@ export class CiviCrm implements INodeType {
 						}
 						: {}),
 				},
+				runtimeBearerToken,
 			);
 
 			out.push({

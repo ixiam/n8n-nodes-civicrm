@@ -410,4 +410,231 @@ describe("CiviCRM Node (n8n validation tests)", () => {
 			expect(call.headers.Authorization).toBeUndefined();
 		});
 	});
+
+	// Issue #30: the fixed-resource create/update/delete branches (shared by
+	// Contact/Membership/Group/Relationship/Activity) never threaded
+	// `runtimeBearerToken` through to civicrmApiRequest, meaning every write
+	// always ran as the client's admin credential regardless of the real
+	// logged-in user's actual CiviCRM permissions - defeating issue #25 for
+	// writes. Scope here is Contact only, per the fix's own scope.
+	describe("Runtime Bearer Token on write operations (issue #30 fix)", () => {
+		// The node keeps a module-level location-type cache keyed by baseUrl
+		// (see getLocationTypeMap in CiviCrm.node.ts), and every mock credential
+		// in this file uses the same "https://mock" baseUrl. Contact create/
+		// update always consults that cache (a one-off OptionValue/get lookup,
+		// always via the admin credential - it's shared installation metadata,
+		// not per-user data, so it is intentionally excluded from the 19 sites
+		// fixed for issue #30). Resetting the module per test keeps each test's
+		// call-count assertions deterministic regardless of execution order or
+		// what other tests in this file touched "contact" create/update first.
+		let FreshCiviCrm: any;
+
+		beforeEach(() => {
+			jest.resetModules();
+			jest.isolateModules(() => {
+				// eslint-disable-next-line @typescript-eslint/no-var-requires
+				FreshCiviCrm = require("../../dist/src/nodes/CiviCrm/CiviCrm.node").CiviCrm;
+			});
+		});
+
+		test("Create Contact: uses the runtime JWT as-is on both the create call and the final re-fetch, with no other calls in between", async () => {
+			const node = new FreshCiviCrm();
+
+			const ctx = mockExecuteContext(
+				[{ json: {} }],
+				{
+					resource: "contact",
+					operation: "create",
+					// No email/phone/address supplied and primary-flags off, so the
+					// only calls are the (unrelated, admin-credential) location-type
+					// lookup, Contact/create, and the final Contact/get - this is what
+					// makes "exactly N calls" assertable for a write branch that
+					// otherwise also does conditional subentity calls.
+					isPrimaryEmail: false,
+					isPrimaryPhone: false,
+					isPrimaryAddress: false,
+					runtimeBearerToken: "runtime.jwt.for.contact-49",
+				},
+				[
+					{ values: [] }, // location-type map lookup (always admin credential, not per-user data)
+					{ values: [{ id: 99 }] },
+					{ values: [{ id: 99, display_name: "New Contact" }] },
+				],
+			);
+
+			const result = await node.execute.call(ctx);
+
+			const calls = (ctx.helpers.httpRequest as jest.Mock).mock.calls;
+			expect(calls).toHaveLength(3);
+			expect(calls[0][0].url).toBe("https://mock/civicrm/ajax/api4/OptionValue/get");
+			expect(calls[1][0].url).toBe("https://mock/civicrm/ajax/api4/Contact/create");
+			expect(calls[1][0].headers.Authorization).toBe("Bearer runtime.jwt.for.contact-49");
+			expect(calls[1][0].headers["X-Civi-Auth"]).toBeUndefined();
+			expect(calls[2][0].url).toBe("https://mock/civicrm/ajax/api4/Contact/get");
+			expect(calls[2][0].headers.Authorization).toBe("Bearer runtime.jwt.for.contact-49");
+			expect(result[0][0].json).toEqual({ id: 99, display_name: "New Contact" });
+		});
+
+		test("Update Contact: uses the runtime JWT as-is on both the update call and the final re-fetch", async () => {
+			const node = new FreshCiviCrm();
+
+			const ctx = mockExecuteContext(
+				[{ json: {} }],
+				{
+					resource: "contact",
+					operation: "update",
+					id: 49,
+					runtimeBearerToken: "runtime.jwt.for.contact-49",
+				},
+				[
+					{ values: [] }, // location-type map lookup (admin credential, fresh cache)
+					{},
+					{ values: [{ id: 49, display_name: "Marketing Test" }] },
+				],
+			);
+
+			await node.execute.call(ctx);
+
+			const calls = (ctx.helpers.httpRequest as jest.Mock).mock.calls;
+			expect(calls).toHaveLength(3);
+			expect(calls[0][0].url).toBe("https://mock/civicrm/ajax/api4/OptionValue/get");
+			expect(calls[1][0].url).toBe("https://mock/civicrm/ajax/api4/Contact/update");
+			expect(calls[1][0].headers.Authorization).toBe("Bearer runtime.jwt.for.contact-49");
+			expect(calls[1][0].headers["X-Civi-Auth"]).toBeUndefined();
+			expect(calls[2][0].url).toBe("https://mock/civicrm/ajax/api4/Contact/get");
+			expect(calls[2][0].headers.Authorization).toBe("Bearer runtime.jwt.for.contact-49");
+		});
+
+		test("Delete Contact: uses the runtime JWT as-is on the single delete call", async () => {
+			const node = new FreshCiviCrm();
+
+			const ctx = mockExecuteContext(
+				[{ json: {} }],
+				{
+					resource: "contact",
+					operation: "delete",
+					id: 49,
+					runtimeBearerToken: "runtime.jwt.for.contact-49",
+				},
+				[{}],
+			);
+
+			const result = await node.execute.call(ctx);
+
+			const calls = (ctx.helpers.httpRequest as jest.Mock).mock.calls;
+			expect(calls).toHaveLength(1);
+			expect(calls[0][0].url).toBe("https://mock/civicrm/ajax/api4/Contact/delete");
+			expect(calls[0][0].headers.Authorization).toBe("Bearer runtime.jwt.for.contact-49");
+			expect(calls[0][0].headers["X-Civi-Auth"]).toBeUndefined();
+			expect(result[0][0].json).toMatchObject({ success: true, deleted_id: 49 });
+		});
+
+		test("Create Contact: a permission-denied (empty) response with a runtime JWT throws instead of silently falling back to the admin credential", async () => {
+			const node = new FreshCiviCrm();
+
+			const ctx = mockExecuteContext(
+				[{ json: {} }],
+				{
+					resource: "contact",
+					operation: "create",
+					isPrimaryEmail: false,
+					isPrimaryPhone: false,
+					isPrimaryAddress: false,
+					runtimeBearerToken: "runtime.jwt.for.contact-49",
+				},
+				[
+					{ values: [] }, // location-type map lookup, unrelated to the denial below
+					// No `values` in the create response, as CiviCRM returns for a
+					// denied create - this must surface as a loud error, never a
+					// silent retry with the credential's admin API key.
+					{},
+				],
+			);
+
+			await expect(node.execute.call(ctx)).rejects.toThrow("Failed to create contact.");
+			// Location lookup + the single denied create call - no retry, no
+			// further calls (e.g. no attempt at the final re-fetch).
+			expect(ctx.helpers.httpRequest as jest.Mock).toHaveBeenCalledTimes(2);
+			const calls = (ctx.helpers.httpRequest as jest.Mock).mock.calls;
+			expect(calls[1][0].url).toBe("https://mock/civicrm/ajax/api4/Contact/create");
+			expect(calls[1][0].headers.Authorization).toBe("Bearer runtime.jwt.for.contact-49");
+		});
+
+		test("Update Contact: a 403 error with a runtime JWT during the update call is thrown as-is - NOT retried with the API key, and no further calls (e.g. final re-fetch) happen", async () => {
+			const node = new FreshCiviCrm();
+
+			const ctx = mockExecuteContext(
+				[{ json: {} }],
+				{
+					resource: "contact",
+					operation: "update",
+					id: 49,
+					runtimeBearerToken: "runtime.jwt.for.contact-49",
+				},
+			);
+			// The location lookup (1st call) resolves normally; only the 2nd
+			// call (the actual update) rejects.
+			(ctx.helpers.httpRequest as jest.Mock).mockImplementationOnce(async () => ({ values: [] }));
+			(ctx.helpers.httpRequest as jest.Mock).mockRejectedValueOnce(
+				Object.assign(new Error("Request failed with status code 403"), {
+					response: { status: 403, data: { error_message: "Permission denied" } },
+				}),
+			);
+
+			await expect(node.execute.call(ctx)).rejects.toThrow();
+			expect(ctx.helpers.httpRequest as jest.Mock).toHaveBeenCalledTimes(2);
+			const calls = (ctx.helpers.httpRequest as jest.Mock).mock.calls;
+			expect(calls[1][0].url).toBe("https://mock/civicrm/ajax/api4/Contact/update");
+			expect(calls[1][0].headers.Authorization).toBe("Bearer runtime.jwt.for.contact-49");
+		});
+
+		test("Update Contact: without the runtimeBearerToken parameter, the old admin-credential path still works (regression)", async () => {
+			const node = new FreshCiviCrm();
+
+			const ctx = mockExecuteContext(
+				[{ json: {} }],
+				{
+					resource: "contact",
+					operation: "update",
+					id: 2,
+					// runtimeBearerToken intentionally omitted
+				},
+				[
+					{ values: [] }, // location-type map lookup
+					{},
+					{ values: [{ id: 2, display_name: "Admin Contact" }] },
+				],
+			);
+
+			await node.execute.call(ctx);
+
+			const calls = (ctx.helpers.httpRequest as jest.Mock).mock.calls;
+			expect(calls).toHaveLength(3);
+			for (const call of calls) {
+				expect(call[0].headers["X-Civi-Auth"]).toBe("Bearer 123");
+				expect(call[0].headers.Authorization).toBeUndefined();
+			}
+		});
+
+		test("Delete Contact: without the runtimeBearerToken parameter, the old admin-credential path still works (regression)", async () => {
+			const node = new FreshCiviCrm();
+
+			const ctx = mockExecuteContext(
+				[{ json: {} }],
+				{
+					resource: "contact",
+					operation: "delete",
+					id: 2,
+					// runtimeBearerToken intentionally omitted
+				},
+				[{}],
+			);
+
+			await node.execute.call(ctx);
+
+			const call = (ctx.helpers.httpRequest as jest.Mock).mock.calls[0][0];
+			expect(call.headers["X-Civi-Auth"]).toBe("Bearer 123");
+			expect(call.headers.Authorization).toBeUndefined();
+		});
+	});
 });
