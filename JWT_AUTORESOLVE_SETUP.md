@@ -146,7 +146,7 @@ Each user that will use JWT authentication needs:
 # Via CiviCRM Admin UI:
 1. Administer → Users → [Your User] → API Token
 2. Click "Generate" or copy existing token
-3. Format: alphanumeric string (e.g., "KyoPZYVtQMjbfXzq")
+3. Format: alphanumeric string (e.g., "EXAMPLE00000API00")
 ```
 
 #### Assign API Key to Contact
@@ -157,7 +157,7 @@ The API Key is stored in the Contact record:
 # Via database (for reference):
 SELECT id, display_name, api_key 
 FROM civicrm_contact 
-WHERE api_key = 'KyoPZYVtQMjbfXzq';
+WHERE api_key = 'EXAMPLE00000API00';
 ```
 
 **Important:** The API Key's Contact record is the one that will be used for JWT generation.
@@ -264,7 +264,7 @@ The Contact that owns the API Key determines JWT permissions:
 |-------|-------|---------|
 | **Display Name** | Any label | "CiviCRM Prod" |
 | **Base URL** | Your CiviCRM URL | `https://your-site.org/civicrm` |
-| **API Token** | From CiviCRM admin | `KyoPZYVtQMjbfXzq` |
+| **API Token** | From CiviCRM admin | `EXAMPLE00000API00` |
 | **Enable JWT Auth** | Toggle ON ✓ | Checked |
 | **JWT Header Mode** | X-Civi-Auth (default) | Recommended |
 
@@ -352,10 +352,10 @@ User makes n8n API call
 ```http
 # Step 2a: Resolve Contact ID
 POST /civicrm/ajax/api4/Contact/get
-X-Civi-Auth: Bearer KyoPZYVtQMjbfXzq
+X-Civi-Auth: Bearer EXAMPLE00000API00
 Content-Type: application/x-www-form-urlencoded
 
-params={"select":["id"],"where":[["api_key","=","KyoPZYVtQMjbfXzq"]],"limit":1}
+params={"select":["id"],"where":[["api_key","=","EXAMPLE00000API00"]],"limit":1}
 
 # Response:
 {"values":[{"id":55601}],"count":1,"countFetched":1}
@@ -364,7 +364,7 @@ params={"select":["id"],"where":[["api_key","=","KyoPZYVtQMjbfXzq"]],"limit":1}
 
 # Step 2b: Generate JWT
 POST /civicrm/ajax/api4/AuthxCredential/create
-X-Civi-Auth: Bearer KyoPZYVtQMjbfXzq
+X-Civi-Auth: Bearer EXAMPLE00000API00
 Content-Type: application/x-www-form-urlencoded
 
 params={"contactId":55601,"ttl":3600}
@@ -495,7 +495,7 @@ Logs show:
 # Check if API Key is assigned to a Contact:
 mysql -u civicrm_user -p civicrm_db -e \
   "SELECT id, display_name, api_key FROM civicrm_contact 
-   WHERE api_key = 'KyoPZYVtQMjbfXzq';"
+   WHERE api_key = 'EXAMPLE00000API00';"
 
 # Should return 1 row with your contact
 # If 0 rows: API Key not assigned
@@ -600,7 +600,7 @@ Add n8n domain to allowed origins
 #!/bin/bash
 
 # 1. Test credentials
-API_KEY="KyoPZYVtQMjbfXzq"
+API_KEY="EXAMPLE00000API00"
 BASE_URL="https://your-site.org/civicrm"
 
 echo "1. Testing API Key..."

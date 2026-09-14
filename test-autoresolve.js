@@ -2,8 +2,8 @@
 
 const https = require('https');
 
-const BASE_URL = 'https://crm.diabetescero.org';
-const API_KEY = 'KyoPZYVtQMjbfXzq';
+const BASE_URL = 'https://crm.example-client.org';
+const API_KEY = 'EXAMPLE00000API00';
 
 function makeRequest(method, path, body = null, isUrlEncoded = false) {
   return new Promise((resolve, reject) => {

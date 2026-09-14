@@ -63,7 +63,7 @@ if (isJwtAuthEnabled(credentials)) {
 
 **Flow:**
 ```
-Input: apiToken = "KyoPZYVtQMjbfXzq"
+Input: apiToken = "EXAMPLE00000API00"
   ↓
 Check cache[baseUrl:apiToken]
   ├─ If cached → return cached ID ✓

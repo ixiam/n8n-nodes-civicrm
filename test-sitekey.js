@@ -7,7 +7,7 @@
  *   node test-sitekey.js <baseUrl> <apiToken> <siteKey>
  * 
  * Example:
- *   node test-sitekey.js "https://crm.diabetescero.org" "KyoPZYVtQMjbfXzq" "dURHYzBHVTZOaDJhaENPWGNzbVZQdXdNRGlJblowUWdXZjZIUwo"
+ *   node test-sitekey.js "https://crm.example-client.org" "EXAMPLE00000API00" "EXAMPLE0000000000000SITE0KEY0000000000000000000000000"
  */
 
 const https = require('https');
@@ -122,7 +122,7 @@ async function main() {
 
 	if (args.length < 3) {
 		console.log('Usage: node test-sitekey.js <baseUrl> <apiToken> <siteKey>');
-		console.log('Example: node test-sitekey.js "https://crm.diabetescero.org" "KyoPZYVtQMjbfXzq" "dURHYzBHVTZOaDJhaENPWGNzbVZQdXdNRGlJblowUWdXZjZIUwo"');
+		console.log('Example: node test-sitekey.js "https://crm.example-client.org" "EXAMPLE00000API00" "EXAMPLE0000000000000SITE0KEY0000000000000000000000000"');
 		process.exit(1);
 	}
 

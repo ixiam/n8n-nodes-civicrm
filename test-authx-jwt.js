@@ -7,7 +7,7 @@
  *   node test-authx-jwt.js <baseUrl> <apiToken> <contactId>
  * 
  * Example:
- *   node test-authx-jwt.js "https://crm.diabetescero.org" "KyoPZYVtQMjbfXzq" 119990
+ *   node test-authx-jwt.js "https://crm.example-client.org" "EXAMPLE00000API00" 119990
  */
 
 const https = require('https');
@@ -182,7 +182,7 @@ async function main() {
 
 	if (args.length < 3) {
 		console.log('Usage: node test-authx-jwt.js <baseUrl> <apiToken> <contactId>');
-		console.log('Example: node test-authx-jwt.js "https://crm.diabetescero.org" "KyoPZYVtQMjbfXzq" 119990');
+		console.log('Example: node test-authx-jwt.js "https://crm.example-client.org" "EXAMPLE00000API00" 119990');
 		process.exit(1);
 	}
 

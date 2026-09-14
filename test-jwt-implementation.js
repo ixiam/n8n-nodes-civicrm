@@ -8,7 +8,7 @@
  *   node test-jwt-implementation.js <baseUrl> <apiToken> <contactId>
  *
  * Example:
- *   node test-jwt-implementation.js "https://crm.diabetescero.org" "YOUR_API_KEY" "1"
+ *   node test-jwt-implementation.js "https://crm.example-client.org" "YOUR_API_KEY" "1"
  */
 
 const https = require('https');

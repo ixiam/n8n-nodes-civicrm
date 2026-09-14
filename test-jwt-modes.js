@@ -119,7 +119,7 @@ async function main() {
 
 	if (args.length < 3) {
 		console.log('Usage: node test-jwt-modes.js <baseUrl> <apiToken> <contactId>');
-		console.log('Example: node test-jwt-modes.js "https://crm.diabetescero.org" "KyoPZYVtQMjbfXzq" 55601');
+		console.log('Example: node test-jwt-modes.js "https://crm.example-client.org" "EXAMPLE00000API00" 55601');
 		process.exit(1);
 	}
 
