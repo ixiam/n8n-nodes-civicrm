@@ -4,6 +4,16 @@ All notable changes to `@ixiam/n8n-nodes-civicrm` are documented here.
 
 ---
 
+## [3.2.3] — 2026-09-14
+
+### Fixed
+- **[HIGH]** The `Runtime Bearer Token` parameter (per-user JWT, introduced in 3.2.0) was never wired into the fixed-resource `create`/`update`/`delete` operations (Contact/Membership/Group/Relationship/Activity) — only `get`/`getMany`/`getFields`/`search`/`raw` used it. Any write on those resources always ran with the shared per-client credential regardless of the real logged-in user's actual CiviCRM permissions, silently defeating per-user permission enforcement for every write path. Threaded through all 19 call sites in the shared create/update/delete branch (the resource's own create/update/delete, plus the Email/Phone/Address sub-record calls and the final re-fetch); the parameter's `displayOptions` now also shows for these three operations. Verified with a real restricted-vs-admin comparison (a contact with only `access CiviCRM` correctly gets `403 Forbidden` with no fallback to the admin credential on `Contact.update`; the admin path still works; the restricted attempt's value never reached the database).
+- **[LOW]** `create` hardcoded the literal path `/civicrm/ajax/api4/Contact/create` instead of templating on the real `entity` variable (the `update` branch two lines below already did this correctly) — creating a Membership/Group/Relationship/Activity was incorrectly hitting the Contact API. Fixed alongside the same change.
+
+Found and fixed while building write-confirmation support for a downstream project (Civi-bot); verified locally with 7 new Contact-scoped tests (21/21 passing) plus the real permission comparison above before publishing.
+
+---
+
 ## [3.2.2] — 2026-09-08
 
 ### Fixed
