@@ -4,6 +4,13 @@ All notable changes to `@ixiam/n8n-nodes-civicrm` are documented here.
 
 ---
 
+## [3.2.4] — 2026-09-26
+
+### Fixed
+- **[HIGH]** The `Runtime Bearer Token` path (per-user JWT) always sent the token in a hardcoded `Authorization: Bearer` header, ignoring the credential's `JWT Header Mode` (default `X-Civi-Auth`). Many nginx + PHP-FPM setups do not pass `Authorization` to PHP, so CiviCRM saw an unauthenticated request and rejected every call with `400 SECURITY ALERT: Ajax requests can only be issued by javascript clients` (surfaced by the node as "Bad request"). The runtime token now goes through the same header logic as the credential's JWT path, so by default it is sent as `X-Civi-Auth`, which always reaches CiviCRM. Verified against a real CiviCRM 6.4.2 on nginx: `Authorization` → 400, `X-Civi-Auth` → 200 with data. Tests updated (22/22 passing), including a new one for `jwtHeaderMode: both`.
+
+---
+
 ## [3.2.3] — 2026-09-14
 
 ### Fixed
