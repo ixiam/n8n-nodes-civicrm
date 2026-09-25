@@ -257,12 +257,12 @@ describe("CiviCRM Node (n8n validation tests)", () => {
 	});
 
 	// Issue #25: per-user permissions via a runtime-supplied Authx JWT.
-	// `runtimeBearerToken` must be used exactly as given (Authorization: Bearer)
+	// `runtimeBearerToken` must be used exactly as given (header per jwtHeaderMode, default X-Civi-Auth)
 	// with none of the credential-based JWT auto-resolve/API key logic - and an
 	// empty/denied result with it must never trigger the API-key fallback that
 	// exists for the credential-based path.
 	describe("Runtime Bearer Token (issue #25 - per-user JWT)", () => {
-		test("Dynamic Search: uses the runtime JWT as-is (Authorization: Bearer) and never touches the credential's API key", async () => {
+		test("Dynamic Search: uses the runtime JWT as-is (X-Civi-Auth by default) and never touches the credential's API key", async () => {
 			const node = new CiviCrm();
 
 			const ctx = mockExecuteContext(
@@ -285,9 +285,36 @@ describe("CiviCRM Node (n8n validation tests)", () => {
 			expect(ctx.helpers.httpRequest as jest.Mock).toHaveBeenCalledTimes(1);
 			const call = (ctx.helpers.httpRequest as jest.Mock).mock.calls[0][0];
 			expect(call.url).toBe("https://mock/civicrm/ajax/api4/Contribution/get");
+			expect(call.headers["X-Civi-Auth"]).toBe("Bearer runtime.jwt.for.contact-49");
+			// Default jwtHeaderMode is xheader: no Authorization header (many nginx +
+			// PHP-FPM setups drop it), and never the API key alongside the JWT.
+			expect(call.headers.Authorization).toBeUndefined();
+		});
+
+		test("runtime JWT honors the credential's jwtHeaderMode ('both' sends X-Civi-Auth and Authorization)", async () => {
+			const node = new CiviCrm();
+
+			const ctx = mockExecuteContext(
+				[{ json: {} }],
+				{
+					resource: "customApi",
+					operation: "search",
+					customEntity: "Contact",
+					searchSelectJson: '["id"]',
+					searchWhereJson: "[]",
+					searchReturnAll: false,
+					searchLimit: 5,
+					runtimeBearerToken: "runtime.jwt.for.contact-49",
+				},
+				[{ values: [{ id: 1 }] }],
+			);
+			(ctx.getCredentials as jest.Mock).mockResolvedValue({ baseUrl: "https://mock", apiToken: "123", jwtHeaderMode: "both" });
+
+			await node.execute.call(ctx);
+
+			const call = (ctx.helpers.httpRequest as jest.Mock).mock.calls[0][0];
+			expect(call.headers["X-Civi-Auth"]).toBe("Bearer runtime.jwt.for.contact-49");
 			expect(call.headers.Authorization).toBe("Bearer runtime.jwt.for.contact-49");
-			// No API key header at all in this mode - not even alongside the JWT.
-			expect(call.headers["X-Civi-Auth"]).toBeUndefined();
 		});
 
 		test("Custom API Call (raw): uses the runtime JWT as-is instead of the credential", async () => {
@@ -309,8 +336,8 @@ describe("CiviCRM Node (n8n validation tests)", () => {
 			await node.execute.call(ctx);
 
 			const call = (ctx.helpers.httpRequest as jest.Mock).mock.calls[0][0];
-			expect(call.headers.Authorization).toBe("Bearer runtime.jwt.for.contact-49");
-			expect(call.headers["X-Civi-Auth"]).toBeUndefined();
+			expect(call.headers["X-Civi-Auth"]).toBe("Bearer runtime.jwt.for.contact-49");
+			expect(call.headers.Authorization).toBeUndefined();
 		});
 
 		test("empty response with a runtime JWT is returned as-is - NOT retried with the API key", async () => {
@@ -468,10 +495,10 @@ describe("CiviCRM Node (n8n validation tests)", () => {
 			expect(calls).toHaveLength(3);
 			expect(calls[0][0].url).toBe("https://mock/civicrm/ajax/api4/OptionValue/get");
 			expect(calls[1][0].url).toBe("https://mock/civicrm/ajax/api4/Contact/create");
-			expect(calls[1][0].headers.Authorization).toBe("Bearer runtime.jwt.for.contact-49");
-			expect(calls[1][0].headers["X-Civi-Auth"]).toBeUndefined();
+			expect(calls[1][0].headers["X-Civi-Auth"]).toBe("Bearer runtime.jwt.for.contact-49");
+			expect(calls[1][0].headers.Authorization).toBeUndefined();
 			expect(calls[2][0].url).toBe("https://mock/civicrm/ajax/api4/Contact/get");
-			expect(calls[2][0].headers.Authorization).toBe("Bearer runtime.jwt.for.contact-49");
+			expect(calls[2][0].headers["X-Civi-Auth"]).toBe("Bearer runtime.jwt.for.contact-49");
 			expect(result[0][0].json).toEqual({ id: 99, display_name: "New Contact" });
 		});
 
@@ -499,10 +526,10 @@ describe("CiviCRM Node (n8n validation tests)", () => {
 			expect(calls).toHaveLength(3);
 			expect(calls[0][0].url).toBe("https://mock/civicrm/ajax/api4/OptionValue/get");
 			expect(calls[1][0].url).toBe("https://mock/civicrm/ajax/api4/Contact/update");
-			expect(calls[1][0].headers.Authorization).toBe("Bearer runtime.jwt.for.contact-49");
-			expect(calls[1][0].headers["X-Civi-Auth"]).toBeUndefined();
+			expect(calls[1][0].headers["X-Civi-Auth"]).toBe("Bearer runtime.jwt.for.contact-49");
+			expect(calls[1][0].headers.Authorization).toBeUndefined();
 			expect(calls[2][0].url).toBe("https://mock/civicrm/ajax/api4/Contact/get");
-			expect(calls[2][0].headers.Authorization).toBe("Bearer runtime.jwt.for.contact-49");
+			expect(calls[2][0].headers["X-Civi-Auth"]).toBe("Bearer runtime.jwt.for.contact-49");
 		});
 
 		test("Delete Contact: uses the runtime JWT as-is on the single delete call", async () => {
@@ -524,8 +551,8 @@ describe("CiviCRM Node (n8n validation tests)", () => {
 			const calls = (ctx.helpers.httpRequest as jest.Mock).mock.calls;
 			expect(calls).toHaveLength(1);
 			expect(calls[0][0].url).toBe("https://mock/civicrm/ajax/api4/Contact/delete");
-			expect(calls[0][0].headers.Authorization).toBe("Bearer runtime.jwt.for.contact-49");
-			expect(calls[0][0].headers["X-Civi-Auth"]).toBeUndefined();
+			expect(calls[0][0].headers["X-Civi-Auth"]).toBe("Bearer runtime.jwt.for.contact-49");
+			expect(calls[0][0].headers.Authorization).toBeUndefined();
 			expect(result[0][0].json).toMatchObject({ success: true, deleted_id: 49 });
 		});
 
@@ -557,7 +584,7 @@ describe("CiviCRM Node (n8n validation tests)", () => {
 			expect(ctx.helpers.httpRequest as jest.Mock).toHaveBeenCalledTimes(2);
 			const calls = (ctx.helpers.httpRequest as jest.Mock).mock.calls;
 			expect(calls[1][0].url).toBe("https://mock/civicrm/ajax/api4/Contact/create");
-			expect(calls[1][0].headers.Authorization).toBe("Bearer runtime.jwt.for.contact-49");
+			expect(calls[1][0].headers["X-Civi-Auth"]).toBe("Bearer runtime.jwt.for.contact-49");
 		});
 
 		test("Update Contact: a 403 error with a runtime JWT during the update call is thrown as-is - NOT retried with the API key, and no further calls (e.g. final re-fetch) happen", async () => {
@@ -585,7 +612,7 @@ describe("CiviCRM Node (n8n validation tests)", () => {
 			expect(ctx.helpers.httpRequest as jest.Mock).toHaveBeenCalledTimes(2);
 			const calls = (ctx.helpers.httpRequest as jest.Mock).mock.calls;
 			expect(calls[1][0].url).toBe("https://mock/civicrm/ajax/api4/Contact/update");
-			expect(calls[1][0].headers.Authorization).toBe("Bearer runtime.jwt.for.contact-49");
+			expect(calls[1][0].headers["X-Civi-Auth"]).toBe("Bearer runtime.jwt.for.contact-49");
 		});
 
 		test("Update Contact: without the runtimeBearerToken parameter, the old admin-credential path still works (regression)", async () => {

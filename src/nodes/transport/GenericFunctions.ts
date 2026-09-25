@@ -112,11 +112,18 @@ export async function civicrmApiRequest(
   // path below has (empty JWT response -> retry with the plaintext API key),
   // and it is exactly what must NOT happen here, so this path never falls
   // through into that logic.
+  //
+  // The token is sent with the same header(s) as the credential's JWT path
+  // (`jwtHeaderMode`, default `xheader` = X-Civi-Auth). A hardcoded
+  // `Authorization` header is not enough: many nginx + PHP-FPM setups do not
+  // pass it to PHP, so CiviCRM sees an unauthenticated request and rejects it
+  // ("SECURITY ALERT: Ajax requests can only be issued by javascript
+  // clients"). X-Civi-Auth always reaches CiviCRM.
   if (runtimeBearerToken) {
     const headers: Record<string, string> = {
       'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: `Bearer ${runtimeBearerToken}`,
     };
+    applyJwtHeaders(headers, runtimeBearerToken, getJwtHeaderMode(credentials));
     const options: IHttpRequestOptions = {
       method,
       url: `${baseUrl}${path}`,
