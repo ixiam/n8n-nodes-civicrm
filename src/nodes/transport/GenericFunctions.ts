@@ -1,9 +1,10 @@
 import type {
   IExecuteFunctions,
   IHttpRequestOptions,
+  INode,
   JsonObject,
 } from 'n8n-workflow';
-import { NodeApiError } from 'n8n-workflow';
+import { NodeApiError, NodeOperationError } from 'n8n-workflow';
 import { isJwtAuthEnabled, getServerIssuedJwt } from './JwtAuth';
 
 type JwtHeaderMode = 'both' | 'authorization' | 'xheader';
@@ -56,6 +57,65 @@ function getHttpErrorDetails(error: unknown): string {
   return status ? `${message} | HTTP ${status}` : message;
 }
 
+/**
+ * Normalizes the optional per-item "Base URL Override" parameter.
+ *
+ * - Empty / whitespace-only -> `undefined` (caller uses the credential's Base URL).
+ * - Trims, strips trailing slashes, prepends `https://` when no scheme is given.
+ * - Rejects any scheme other than http/https, and anything that does not parse
+ *   as a URL with a host, with a NodeOperationError.
+ *
+ * Idempotent: normalizing an already-normalized value returns the same string,
+ * so it is safe to call both in the node and in the transport.
+ */
+export function normalizeBaseUrlOverride(
+  node: INode,
+  rawValue: unknown,
+  itemIndex?: number,
+): string | undefined {
+  if (rawValue === undefined || rawValue === null) return undefined;
+
+  let value = String(rawValue).trim();
+  if (!value) return undefined;
+
+  value = value.replace(/\/+$/, '');
+
+  const schemeMatch = /^([a-z][a-z0-9+.-]*):\/\//i.exec(value);
+  if (schemeMatch) {
+    const scheme = schemeMatch[1].toLowerCase();
+    if (scheme !== 'http' && scheme !== 'https') {
+      throw new NodeOperationError(
+        node,
+        `Invalid Base URL Override "${value}": only http:// and https:// URLs are allowed (got "${scheme}://").`,
+        { itemIndex },
+      );
+    }
+  } else {
+    value = `https://${value}`;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new NodeOperationError(
+      node,
+      `Invalid Base URL Override "${String(rawValue).trim()}": not a valid URL. Expected the site root, e.g. https://example.org`,
+      { itemIndex },
+    );
+  }
+
+  if ((parsed.protocol !== 'http:' && parsed.protocol !== 'https:') || !parsed.hostname) {
+    throw new NodeOperationError(
+      node,
+      `Invalid Base URL Override "${String(rawValue).trim()}": only http:// and https:// URLs with a host are allowed.`,
+      { itemIndex },
+    );
+  }
+
+  return value;
+}
+
 export function buildCiviAuthHeaders(
   credentials: Record<string, unknown>,
   baseUrl: string,
@@ -89,6 +149,14 @@ export function buildCiviAuthHeaders(
  * (JWT auto-resolve via `getServerIssuedJwt`/`resolveContactId`, or the
  * empty-response/error fallback to the credential's API key) runs at all.
  * See the early-return block right below for why.
+ *
+ * `baseUrlOverride` (optional) replaces the credential's Base URL for this
+ * call (per-item "Base URL Override" parameter), so a single credential/API key
+ * can target several CiviCRM instances. It is used for every request made by
+ * this call, including the JWT paths (Contact/get auto-resolve,
+ * AuthxCredential/create) and the API key fallback. The JWT caches in JwtAuth
+ * are keyed by this effective base URL, so a token issued by one instance is
+ * never sent to another. Empty/undefined -> credential Base URL, unchanged.
  */
 export async function civicrmApiRequest(
   this: IExecuteFunctions,
@@ -96,9 +164,11 @@ export async function civicrmApiRequest(
   path: string,
   body: Record<string, unknown>,
   runtimeBearerToken?: string,
+  baseUrlOverride?: string,
 ) {
   const credentials = (await this.getCredentials('civiCrmApi')) as Record<string, unknown>;
-  const baseUrl = (credentials.baseUrl as string).replace(/\/$/, '');
+  const normalizedOverride = normalizeBaseUrlOverride(this.getNode(), baseUrlOverride);
+  const baseUrl = normalizedOverride ?? (credentials.baseUrl as string).replace(/\/$/, '');
   const apiToken = credentials.apiToken as string;
 
   // Runtime bearer token path: used exactly as given, with no fallback.

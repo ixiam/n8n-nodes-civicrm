@@ -157,6 +157,21 @@ Option 2: Regenerate API Key (CiviCRM)
 
 After entering credentials, click **Test credentials** to validate the connection.
 
+### **Base URL Override (v3.3.0+)**
+
+One credential can target many CiviCRM instances that share the same API key. Set the node's **Base URL Override** field, usually with an expression, and every request for that item goes to that URL instead of the credential's Base URL.
+
+| Field | Description |
+|-------|-------------|
+| **Base URL Override** | Optional. Site root, without `/civicrm`. Example: `={{ $json.instance_url }}` |
+
+- Normalized per item: trimmed, trailing slashes removed, `https://` added when no scheme is given. Only `http://` and `https://` are accepted; anything else fails that item (honors *Continue On Fail*).
+- Applies to every request for the item, including sub-requests, the JWT flow and the API key fallback. JWT and contact ID caches are keyed by the effective URL, so a token from one instance is never sent to another.
+- Empty (the default, and every workflow saved before 3.3.0): the credential's Base URL is used, exactly as before.
+- Dropdowns in the editor (`loadOptions`) have no item context and always use the credential's Base URL.
+
+> ⚠️ The credential's API key is sent to whatever URL the override resolves to. Only feed it URLs your workflow controls (a fixed list, or a source only trusted people can edit).
+
 ---
 
 ## 📦 Supported Entities
