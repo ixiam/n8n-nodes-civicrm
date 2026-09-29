@@ -4,6 +4,19 @@ All notable changes to `@ixiam/n8n-nodes-civicrm` are documented here.
 
 ---
 
+## [3.3.0] — 2026-09-29
+
+### Added
+- **`Base URL Override`** node parameter (`baseUrlOverride`, string, default empty, visible for every resource and operation). An optional per-item value, usually set by expression (`={{ $json.instance_url }}`), that replaces the credential's Base URL for every request made for that item. This lets one credential (the same API key) target many CiviCRM instances, e.g. a single workflow querying 17 RedCross instances that share one API key, where before you needed 17 credentials. Normalization: trimmed, trailing slashes stripped, `https://` prepended when no scheme is given. Only `http://` and `https://` are accepted; anything else (`ftp://`, `file://`, ...) or an unparseable URL fails that item with a clear `NodeOperationError` (honors *Continue On Fail*).
+  - The override applies to every request for the item: the operation itself, the Email/Phone/Address sub-requests and final re-fetch on create/update, the location-type lookup, the `Runtime Bearer Token` path, the whole credential JWT flow (`Contact/get` auto-resolve of the contact ID, `AuthxCredential/create`), and the API key fallback.
+  - The JWT/contact-ID caches in `JwtAuth.ts` and the location-type cache are keyed by the effective base URL, so a JWT (or location map) from one instance is never sent to or reused for another.
+  - `loadOptions` has no item context, so it keeps using the credential's Base URL.
+  - With the parameter empty or missing (every workflow saved before this release) behavior is exactly as before. No change to output data shape. The Raw API Call still returns the full APIv4 response, including `countMatched` when `values` is empty (e.g. `select: ['row_count']`).
+- `normalizeBaseUrlOverride()` exported from `transport/GenericFunctions.ts`. `civicrmApiRequest()` takes a new optional 6th argument `baseUrlOverride`, so existing callers are unaffected.
+- `test/nodes/BaseUrlOverride.test.ts`: 33 unit tests covering normalization, invalid schemes, override vs. credential URL per item, fixed-resource sub-requests, runtime token + override, JWT cache isolation across instances, the JWT to API key fallback, loadOptions, Raw API Call `countMatched` passthrough, and a real HTTP round trip against `test/helpers/mockServer`.
+
+---
+
 ## [3.2.4] — 2026-09-26
 
 ### Fixed

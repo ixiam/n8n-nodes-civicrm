@@ -11,6 +11,7 @@ import { NodeConnectionTypes } from 'n8n-workflow';
 import {
 	civicrmApiRequest,
 	buildCiviAuthHeaders,
+	normalizeBaseUrlOverride,
 } from '../transport/GenericFunctions';
 import { resourceProp, operationProp, customApiOperationProp } from './descriptions/resources';
 import { genericFields, upsertFields } from './descriptions/generic';
@@ -49,17 +50,32 @@ function normalizeLocationKey(s: string): string {
 		.replace(/[^a-z0-9]+/g, '');
 }
 
-async function getLocationTypeMap(this: IExecuteFunctions): Promise<Record<string, string>> {
-	const credentials = await this.getCredentials('civiCrmApi');
-	const baseUrl = String(credentials?.baseUrl || 'default');
+async function getLocationTypeMap(
+	this: IExecuteFunctions,
+	baseUrlOverride?: string,
+): Promise<Record<string, string>> {
+	// Cache keyed by the effective base URL (override if set, else credential)
+	// so location types of one CiviCRM instance are never reused for another.
+	let baseUrl = baseUrlOverride;
+	if (!baseUrl) {
+		const credentials = await this.getCredentials('civiCrmApi');
+		baseUrl = String(credentials?.baseUrl || 'default');
+	}
 
 	if (locationTypeCache[baseUrl]) return locationTypeCache[baseUrl];
 
-	const res = await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/OptionValue/get', {
-		where: [['option_group_id:name', '=', 'location_type']],
-		select: ['name', 'label'],
-		limit: 0,
-	});
+	const res = await civicrmApiRequest.call(
+		this,
+		'POST',
+		'/civicrm/ajax/api4/OptionValue/get',
+		{
+			where: [['option_group_id:name', '=', 'location_type']],
+			select: ['name', 'label'],
+			limit: 0,
+		},
+		undefined,
+		baseUrlOverride,
+	);
 
 	const map: Record<string, string> = {};
 	const values = (res?.values || []) as Array<{ name?: string; label?: string }>;
@@ -763,6 +779,23 @@ export class CiviCrm implements INodeType {
 			},
 
 			//
+			// BASE URL OVERRIDE (per item: one credential / API key shared by
+			// several CiviCRM instances - see GenericFunctions.civicrmApiRequest)
+			//
+			{
+				displayName: 'Base URL Override',
+				name: 'baseUrlOverride',
+				type: 'string',
+				default: '',
+				placeholder: 'https://example.org',
+				description:
+					"Optional. Replaces the credential's Base URL for this item (site root, without /civicrm). " +
+					'Useful for many instances sharing the same API key. Can be set by expression, e.g. ' +
+					'={{ $json.instance_url }}. If no scheme is given, https:// is assumed; only http(s) is allowed. ' +
+					"Leave empty to use the credential's Base URL.",
+			},
+
+			//
 			// DYNAMIC FIELDS
 			//
 			...genericFields,
@@ -830,6 +863,16 @@ export class CiviCrm implements INodeType {
 			const runtimeBearerToken =
 				(this.getNodeParameter('runtimeBearerToken', i, '') as string).trim() || undefined;
 
+			// Per-item Base URL Override: same credential/API key, different
+			// CiviCRM instance per item. Normalized/validated here (inside the
+			// per-item try so continueOnFail applies) and passed to every
+			// civicrmApiRequest call for this item. Empty -> credential Base URL.
+			const baseUrlOverride = normalizeBaseUrlOverride(
+				this.getNode(),
+				this.getNodeParameter('baseUrlOverride', i, ''),
+				i,
+			);
+
 			// Custom API resource: raw passthrough, plus first-class List Fields /
 			// Dynamic Search operations for any API4 entity (not just the 5 fixed
 			// resources above).
@@ -852,6 +895,7 @@ export class CiviCrm implements INodeType {
 						`/civicrm/ajax/api4/${customEntity}/getFields`,
 						{ action: actionContext, loadOptions: true },
 						runtimeBearerToken,
+						baseUrlOverride,
 					);
 
 					const vals = (res?.values ?? []) as IDataObject[];
@@ -905,6 +949,7 @@ export class CiviCrm implements INodeType {
 								`/civicrm/ajax/api4/${customEntity}/get`,
 								{ select, where, limit: page, offset },
 								runtimeBearerToken,
+								baseUrlOverride,
 							);
 
 							const vals = (r?.values ?? []) as IDataObject[];
@@ -925,6 +970,7 @@ export class CiviCrm implements INodeType {
 							`/civicrm/ajax/api4/${customEntity}/get`,
 							{ select, where, limit },
 							runtimeBearerToken,
+							baseUrlOverride,
 						);
 
 						const vals = (r?.values ?? []) as IDataObject[];
@@ -957,6 +1003,7 @@ export class CiviCrm implements INodeType {
 					`/civicrm/ajax/api4/${customEntity}/${action}`,
 					params,
 					runtimeBearerToken,
+					baseUrlOverride,
 				);
 
 				// Return the raw API4 response so advanced users can work with values and metadata
@@ -1019,6 +1066,7 @@ export class CiviCrm implements INodeType {
 					`/civicrm/ajax/api4/${entity}/get`,
 					params,
 					runtimeBearerToken,
+					baseUrlOverride,
 				);
 
 				out.push({
@@ -1089,6 +1137,7 @@ export class CiviCrm implements INodeType {
 							`/civicrm/ajax/api4/${entity}/get`,
 							{ ...params, limit: page, offset },
 							runtimeBearerToken,
+							baseUrlOverride,
 						);
 
 						const vals = r?.values ?? [];
@@ -1112,6 +1161,7 @@ export class CiviCrm implements INodeType {
 						`/civicrm/ajax/api4/${entity}/get`,
 						{ ...params, limit },
 						runtimeBearerToken,
+						baseUrlOverride,
 					);
 
 					const vals = r?.values ?? [];
@@ -1140,6 +1190,7 @@ export class CiviCrm implements INodeType {
 						where: [['id', '=', id]],
 					},
 					runtimeBearerToken,
+					baseUrlOverride,
 				);
 
 				out.push({
@@ -1174,7 +1225,7 @@ export class CiviCrm implements INodeType {
 
 			let locationTypeMap: Record<string, string> = {};
 			if (resource === 'contact') {
-				locationTypeMap = await getLocationTypeMap.call(this);
+				locationTypeMap = await getLocationTypeMap.call(this, baseUrlOverride);
 			}
 
 			for (const p of pairs) {
@@ -1299,6 +1350,7 @@ export class CiviCrm implements INodeType {
 					`/civicrm/ajax/api4/${entity}/create`,
 					{ values },
 					runtimeBearerToken,
+					baseUrlOverride,
 				);
 				contactId = r?.values?.[0]?.id;
 				if (!contactId) throw new Error('Failed to create contact.');
@@ -1312,6 +1364,7 @@ export class CiviCrm implements INodeType {
 						where: [['id', '=', contactId]],
 					},
 					runtimeBearerToken,
+					baseUrlOverride,
 				);
 			}
 
@@ -1323,7 +1376,7 @@ export class CiviCrm implements INodeType {
 							['contact_id', '=', contactId],
 							['is_primary', '=', true],
 						],
-					}, runtimeBearerToken);
+					}, runtimeBearerToken, baseUrlOverride);
 				}
 				if (isCreate && isPrimaryPhone) {
 					await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/Phone/delete', {
@@ -1331,7 +1384,7 @@ export class CiviCrm implements INodeType {
 							['contact_id', '=', contactId],
 							['is_primary', '=', true],
 						],
-					}, runtimeBearerToken);
+					}, runtimeBearerToken, baseUrlOverride);
 				}
 				if (isCreate && isPrimaryAddress) {
 					await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/Address/delete', {
@@ -1339,7 +1392,7 @@ export class CiviCrm implements INodeType {
 							['contact_id', '=', contactId],
 							['is_primary', '=', true],
 						],
-					}, runtimeBearerToken);
+					}, runtimeBearerToken, baseUrlOverride);
 				}
 
 				if (Object.keys(emailData).length) {
@@ -1351,7 +1404,7 @@ export class CiviCrm implements INodeType {
 								is_primary: isPrimaryEmail,
 								'location_type_id:name': emailLocationName,
 							},
-						}, runtimeBearerToken);
+						}, runtimeBearerToken, baseUrlOverride);
 					} else {
 						const existingEmail = await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/Email/get', {
 							where: [
@@ -1360,7 +1413,7 @@ export class CiviCrm implements INodeType {
 							],
 							limit: 1,
 							select: ['id'],
-						}, runtimeBearerToken);
+						}, runtimeBearerToken, baseUrlOverride);
 						const existingEmailId = existingEmail?.values?.[0]?.id as number | undefined;
 						if (existingEmailId) {
 							await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/Email/update', {
@@ -1370,7 +1423,7 @@ export class CiviCrm implements INodeType {
 									contact_id: contactId,
 									is_primary: isPrimaryEmail,
 								},
-							}, runtimeBearerToken);
+							}, runtimeBearerToken, baseUrlOverride);
 						} else {
 							await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/Email/create', {
 								values: {
@@ -1379,7 +1432,7 @@ export class CiviCrm implements INodeType {
 									is_primary: isPrimaryEmail,
 									'location_type_id:name': emailLocationName,
 								},
-							}, runtimeBearerToken);
+							}, runtimeBearerToken, baseUrlOverride);
 						}
 					}
 				}
@@ -1393,7 +1446,7 @@ export class CiviCrm implements INodeType {
 								is_primary: isPrimaryPhone,
 								'location_type_id:name': phoneLocationName,
 							},
-						}, runtimeBearerToken);
+						}, runtimeBearerToken, baseUrlOverride);
 					} else {
 						const existingPhone = await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/Phone/get', {
 							where: [
@@ -1402,7 +1455,7 @@ export class CiviCrm implements INodeType {
 							],
 							limit: 1,
 							select: ['id'],
-						}, runtimeBearerToken);
+						}, runtimeBearerToken, baseUrlOverride);
 						const existingPhoneId = existingPhone?.values?.[0]?.id as number | undefined;
 						if (existingPhoneId) {
 							await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/Phone/update', {
@@ -1412,7 +1465,7 @@ export class CiviCrm implements INodeType {
 									contact_id: contactId,
 									is_primary: isPrimaryPhone,
 								},
-							}, runtimeBearerToken);
+							}, runtimeBearerToken, baseUrlOverride);
 						} else {
 							await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/Phone/create', {
 								values: {
@@ -1421,7 +1474,7 @@ export class CiviCrm implements INodeType {
 									is_primary: isPrimaryPhone,
 									'location_type_id:name': phoneLocationName,
 								},
-							}, runtimeBearerToken);
+							}, runtimeBearerToken, baseUrlOverride);
 						}
 					}
 				}
@@ -1436,7 +1489,7 @@ export class CiviCrm implements INodeType {
 								is_primary: isPrimaryAddress,
 								'location_type_id:name': addressLocationName,
 							},
-						}, runtimeBearerToken);
+						}, runtimeBearerToken, baseUrlOverride);
 					} else {
 						const existingAddress = await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/Address/get', {
 							where: [
@@ -1445,7 +1498,7 @@ export class CiviCrm implements INodeType {
 							],
 							limit: 1,
 							select: ['id'],
-						}, runtimeBearerToken);
+						}, runtimeBearerToken, baseUrlOverride);
 						const existingAddressId = existingAddress?.values?.[0]?.id as number | undefined;
 						if (existingAddressId) {
 							await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/Address/update', {
@@ -1455,7 +1508,7 @@ export class CiviCrm implements INodeType {
 									contact_id: contactId,
 									is_primary: isPrimaryAddress,
 								},
-							}, runtimeBearerToken);
+							}, runtimeBearerToken, baseUrlOverride);
 						} else {
 							await civicrmApiRequest.call(this, 'POST', '/civicrm/ajax/api4/Address/create', {
 								values: {
@@ -1464,7 +1517,7 @@ export class CiviCrm implements INodeType {
 									is_primary: isPrimaryAddress,
 									'location_type_id:name': addressLocationName,
 								},
-							}, runtimeBearerToken);
+							}, runtimeBearerToken, baseUrlOverride);
 						}
 					}
 				}
@@ -1500,6 +1553,7 @@ export class CiviCrm implements INodeType {
 						: {}),
 				},
 				runtimeBearerToken,
+				baseUrlOverride,
 			);
 
 			out.push({
