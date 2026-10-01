@@ -1,0 +1,212 @@
+{
+  "name": "E2E 4.0 - auth matrix",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "customApi",
+        "operation": "raw",
+        "customEntity": "Contact",
+        "customAction": "get",
+        "customParamsJson": "{\"select\":[\"id\",\"display_name\"],\"where\":[[\"id\",\"=\",\"user_contact_id\"]]}"
+      },
+      "name": "Who am I (admin-key-xheader)",
+      "type": "@ixiam/n8n-nodes-civicrm.civiCrm",
+      "typeVersion": 1,
+      "position": [
+        200,
+        0
+      ],
+      "credentials": {
+        "civiCrmApi": {
+          "name": "admin-key-xheader"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "customApi",
+        "operation": "raw",
+        "customEntity": "Contact",
+        "customAction": "get",
+        "customParamsJson": "{\"select\":[\"id\",\"display_name\"],\"where\":[[\"id\",\"=\",\"user_contact_id\"]]}"
+      },
+      "name": "Who am I (admin-pass-header)",
+      "type": "@ixiam/n8n-nodes-civicrm.civiCrm",
+      "typeVersion": 1,
+      "position": [
+        400,
+        0
+      ],
+      "credentials": {
+        "civiCrmApi": {
+          "name": "admin-pass-header"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "customApi",
+        "operation": "raw",
+        "customEntity": "Contact",
+        "customAction": "get",
+        "customParamsJson": "{\"select\":[\"id\",\"display_name\"],\"where\":[[\"id\",\"=\",\"user_contact_id\"]]}"
+      },
+      "name": "Who am I (limited-key-param)",
+      "type": "@ixiam/n8n-nodes-civicrm.civiCrm",
+      "typeVersion": 1,
+      "position": [
+        600,
+        0
+      ],
+      "credentials": {
+        "civiCrmApi": {
+          "name": "limited-key-param"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "customApi",
+        "operation": "raw",
+        "customEntity": "Contact",
+        "customAction": "get",
+        "customParamsJson": "{\"select\":[\"id\",\"display_name\"],\"where\":[[\"id\",\"=\",\"user_contact_id\"]]}"
+      },
+      "name": "Who am I (admin-key-jwt)",
+      "type": "@ixiam/n8n-nodes-civicrm.civiCrm",
+      "typeVersion": 1,
+      "position": [
+        800,
+        0
+      ],
+      "credentials": {
+        "civiCrmApi": {
+          "name": "admin-key-jwt"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "customApi",
+        "operation": "raw",
+        "customEntity": "Contact",
+        "customAction": "get",
+        "customParamsJson": "{\"select\":[\"id\",\"display_name\"],\"where\":[[\"id\",\"=\",\"user_contact_id\"]]}"
+      },
+      "name": "Who am I (limited-key-jwt)",
+      "type": "@ixiam/n8n-nodes-civicrm.civiCrm",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        0
+      ],
+      "credentials": {
+        "civiCrmApi": {
+          "name": "limited-key-jwt"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "customApi",
+        "operation": "raw",
+        "customEntity": "Contact",
+        "customAction": "get",
+        "customParamsJson": "{\"select\":[\"id\",\"display_name\"],\"where\":[[\"id\",\"=\",\"user_contact_id\"]]}"
+      },
+      "name": "Who am I (legacy-3x)",
+      "type": "@ixiam/n8n-nodes-civicrm.civiCrm",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        0
+      ],
+      "credentials": {
+        "civiCrmApi": {
+          "name": "legacy-3x"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Who am I (admin-key-xheader)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Who am I (admin-key-xheader)": {
+      "main": [
+        [
+          {
+            "node": "Who am I (admin-pass-header)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Who am I (admin-pass-header)": {
+      "main": [
+        [
+          {
+            "node": "Who am I (limited-key-param)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Who am I (limited-key-param)": {
+      "main": [
+        [
+          {
+            "node": "Who am I (admin-key-jwt)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Who am I (admin-key-jwt)": {
+      "main": [
+        [
+          {
+            "node": "Who am I (limited-key-jwt)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Who am I (limited-key-jwt)": {
+      "main": [
+        [
+          {
+            "node": "Who am I (legacy-3x)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

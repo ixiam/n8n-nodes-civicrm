@@ -1,0 +1,161 @@
+{
+  "name": "E2E 4.0 - Site key",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "customApi",
+        "operation": "raw",
+        "customEntity": "Contact",
+        "customAction": "get",
+        "customParamsJson": "{\"select\":[\"id\",\"display_name\"],\"where\":[[\"id\",\"=\",\"user_contact_id\"]]}"
+      },
+      "name": "Who am I (sitekey-key-xheader)",
+      "type": "@ixiam/n8n-nodes-civicrm.civiCrm",
+      "typeVersion": 1,
+      "position": [
+        200,
+        0
+      ],
+      "credentials": {
+        "civiCrmApi": {
+          "name": "sitekey-key-xheader"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "customApi",
+        "operation": "raw",
+        "customEntity": "Contact",
+        "customAction": "get",
+        "customParamsJson": "{\"select\":[\"id\",\"display_name\"],\"where\":[[\"id\",\"=\",\"user_contact_id\"]]}"
+      },
+      "name": "Who am I (sitekey-pass-param)",
+      "type": "@ixiam/n8n-nodes-civicrm.civiCrm",
+      "typeVersion": 1,
+      "position": [
+        400,
+        0
+      ],
+      "credentials": {
+        "civiCrmApi": {
+          "name": "sitekey-pass-param"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "anyEntity",
+        "anyEntity": "Contact",
+        "anySelect": [
+          "id",
+          "display_name"
+        ],
+        "anyFilters": {
+          "filter": [
+            {
+              "field": "id",
+              "operator": "=",
+              "value": "user_contact_id"
+            }
+          ]
+        },
+        "anyLimit": 1,
+        "operation": "get"
+      },
+      "name": "Any Entity: own contact",
+      "type": "@ixiam/n8n-nodes-civicrm.civiCrm",
+      "typeVersion": 1,
+      "position": [
+        600,
+        0
+      ],
+      "credentials": {
+        "civiCrmApi": {
+          "name": "sitekey-key-xheader"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "customApi",
+        "operation": "raw",
+        "customEntity": "Contact",
+        "customAction": "get",
+        "customParamsJson": "{\"select\":[\"id\",\"display_name\"],\"where\":[[\"id\",\"=\",\"user_contact_id\"]]}"
+      },
+      "name": "Without site key (expected error)",
+      "type": "@ixiam/n8n-nodes-civicrm.civiCrm",
+      "typeVersion": 1,
+      "position": [
+        800,
+        0
+      ],
+      "credentials": {
+        "civiCrmApi": {
+          "name": "sitekey-missing"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Who am I (sitekey-key-xheader)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Who am I (sitekey-key-xheader)": {
+      "main": [
+        [
+          {
+            "node": "Who am I (sitekey-pass-param)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Who am I (sitekey-pass-param)": {
+      "main": [
+        [
+          {
+            "node": "Any Entity: own contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any Entity: own contact": {
+      "main": [
+        [
+          {
+            "node": "Without site key (expected error)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

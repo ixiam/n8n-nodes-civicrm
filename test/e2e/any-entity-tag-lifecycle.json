@@ -1,0 +1,262 @@
+{
+  "name": "E2E 4.0 - Any Entity: Tag lifecycle",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "anyEntity",
+        "anyEntity": "Tag",
+        "anyValues": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "name": "=n8n-e2e-{{ $now.toMillis() }}",
+            "description": "created by e2e"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "operation": "create"
+      },
+      "name": "Create Tag",
+      "type": "@ixiam/n8n-nodes-civicrm.civiCrm",
+      "typeVersion": 1,
+      "position": [
+        200,
+        0
+      ],
+      "credentials": {
+        "civiCrmApi": {
+          "name": "admin-key-xheader"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "anyEntity",
+        "anyEntity": "Tag",
+        "anySelect": [
+          "id",
+          "name",
+          "description"
+        ],
+        "anyFilters": {
+          "filter": [
+            {
+              "field": "id",
+              "operator": "=",
+              "value": "={{ $json.id }}"
+            }
+          ]
+        },
+        "anyLimit": 5,
+        "operation": "get"
+      },
+      "name": "Get Tag",
+      "type": "@ixiam/n8n-nodes-civicrm.civiCrm",
+      "typeVersion": 1,
+      "position": [
+        400,
+        0
+      ],
+      "credentials": {
+        "civiCrmApi": {
+          "name": "admin-pass-header"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "anyEntity",
+        "anyEntity": "Tag",
+        "anyValues": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.id }}",
+            "description": "updated by e2e"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "operation": "update"
+      },
+      "name": "Update Tag",
+      "type": "@ixiam/n8n-nodes-civicrm.civiCrm",
+      "typeVersion": 1,
+      "position": [
+        600,
+        0
+      ],
+      "credentials": {
+        "civiCrmApi": {
+          "name": "admin-key-xheader"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "anyEntity",
+        "anyEntity": "Tag",
+        "anySelect": [
+          "id",
+          "description"
+        ],
+        "anyFilters": {
+          "filter": [
+            {
+              "field": "id",
+              "operator": "=",
+              "value": "={{ $json.id }}"
+            }
+          ]
+        },
+        "anyLimit": 5,
+        "operation": "get"
+      },
+      "name": "Read Back",
+      "type": "@ixiam/n8n-nodes-civicrm.civiCrm",
+      "typeVersion": 1,
+      "position": [
+        800,
+        0
+      ],
+      "credentials": {
+        "civiCrmApi": {
+          "name": "admin-key-xheader"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "anyEntity",
+        "anyEntity": "Tag",
+        "anyDeleteId": "={{ $json.id }}",
+        "operation": "delete"
+      },
+      "name": "Delete Tag",
+      "type": "@ixiam/n8n-nodes-civicrm.civiCrm",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        0
+      ],
+      "credentials": {
+        "civiCrmApi": {
+          "name": "admin-key-xheader"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Create Tag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Tag": {
+      "main": [
+        [
+          {
+            "node": "Get Tag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Tag": {
+      "main": [
+        [
+          {
+            "node": "Update Tag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Tag": {
+      "main": [
+        [
+          {
+            "node": "Read Back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back": {
+      "main": [
+        [
+          {
+            "node": "Delete Tag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
