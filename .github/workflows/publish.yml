@@ -32,7 +32,12 @@ jobs:
       - name: Build
         run: pnpm run build
 
-      # No NPM_TOKEN needed: authenticates via OIDC using the Trusted
-      # Publisher configured on npmjs.com for this repo/workflow.
+      - name: Lint and test
+        run: pnpm run lint && pnpm run test:unit
+
+      # No NPM_TOKEN needed: authenticates via OIDC (Trusted Publisher on npmjs.com).
+      # Pre-release versions (e.g. 4.0.0-dev.1) go to the "next" tag, never "latest".
       - name: Publish with provenance
-        run: npm publish --provenance --access public
+        run: |
+          TAG=$(node -p "require('./package.json').version.includes('-') ? 'next' : 'latest'")
+          npm publish --provenance --access public --tag "$TAG"

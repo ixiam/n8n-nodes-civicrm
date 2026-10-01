@@ -1,17 +1,17 @@
 {
   "name": "@ixiam/n8n-nodes-civicrm",
-  "version": "3.3.0",
-  "description": "Full-featured CiviCRM API v4 integration for n8n",
+  "version": "4.0.0-dev.1",
+  "description": "CiviCRM API v4 for n8n: built-in contact operations plus every entity and action discovered from the site, with API key or password auth on any AuthX route",
   "license": "MIT",
   "keywords": [
     "n8n-community-node-package",
     "civicrm",
     "api4",
     "crm",
-    "automation"
+    "automation",
+    "authx"
   ],
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/src/index.js",
   "files": [
     "dist"
   ],
@@ -21,8 +21,9 @@
     "copy:assets": "mkdir -p dist/src/nodes/CiviCrm dist/credentials && cp src/nodes/CiviCrm/civicrm.svg dist/src/nodes/CiviCrm/ && cp src/nodes/CiviCrm/civicrm.svg dist/credentials/",
     "lint": "n8n-node lint",
     "release": "n8n-node release",
-    "test": "npm run build",
-    "test:unit": "jest"
+    "test": "pnpm run build && jest",
+    "test:unit": "jest",
+    "test:integration": "jest --runInBand test/integration"
   },
   "repository": {
     "type": "git",
