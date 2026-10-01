@@ -1,6 +1,6 @@
-```
 # Dependencies
 node_modules/
+.pnpm-store/
 
 # Logs and temp files
 *.log
@@ -67,4 +67,3 @@ Thumbs.db
 *.tar.bz2
 *.tar.xz
 *.tar.zst
-```
