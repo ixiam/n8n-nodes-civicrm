@@ -4,6 +4,45 @@ All notable changes to `@ixiam/n8n-nodes-civicrm` are documented here.
 
 ---
 
+## [4.0.0] — Unreleased (`4.0.0-dev.1` on npm `next`)
+
+Major release: every APIv4 REST authentication option AuthX offers to a server-side client, and **Any Entity**, which discovers the site's entities and actions at runtime. Built-in resources and Custom API Call are unchanged; credentials saved with 3.x keep working. See [AUTHENTICATION.md](AUTHENTICATION.md).
+
+### Breaking changes
+- **JWT fallback narrowed.** With *Use Short-Lived JWT*, a call is repeated with the stored credential only when CiviCRM refuses the JWT at sign-in (HTTP 401). Empty results are returned as is (3.x retried them with the API key, doubling every empty search), and other errors are reported instead of re-sent (3.x could send a write twice). After a refusal, JWT sessions pause for 15 minutes per credential.
+- **Legacy JWT Header Mode `Both Headers`** now sends only `X-Civi-Auth`. CiviCRM always evaluated X-Civi-Auth first and never fell back to Authorization, so the second header had no effect. `Authorization Header` keeps working as before.
+- **Contact behind a JWT** is resolved with `Contact.get where id = 'user_contact_id'` instead of `where api_key = <key>`.
+- **Phone Location Type "Mobile" removed** (it is a phone type, not a CiviCRM location type, and failed on standard sites). All three location selectors now offer Home, Work, Main, Billing, Other. Workflows that stored "Mobile" must pick another value.
+- **Entity and action names are validated** (letters, digits, underscore) in Custom API Call and Any Entity, because they become part of the request URL.
+- Error messages from CiviCRM are mapped to actionable messages (e.g. which AuthX setting to change) instead of raw HTTP text; "Failed to create contact." now names the entity.
+- Removed the unused `loadOptionValues` method (it only knew API keys) and a stale `testedBy` reference; the credential's own test now signs in exactly as configured.
+
+### Added
+- **Credential**: *Authentication Type* (API Key, or Username and Password via HTTP Basic), *Send Credentials Via* (X-Civi-Auth header, Authorization header, `_authx` POST parameter), *Site Key* (`X-Civi-Key`, for the AuthX site-key guard). JWT sessions work with either credential type.
+- **Test credential** signs in exactly as configured (type, route, site key) and asks CiviCRM who the credential belongs to, using n8n's native `authenticate` hook.
+- **Any Entity** resource with its own operations (Get Many, Create, Create or Update, Update, Delete, Other Action), so it appears in n8n's node picker as "… any entity" actions. The entity dropdown and the Other Action list are discovered from the site (`Entity.get`, `getActions`); Get Many has field selection, filters, sort, limit and Return All; Create, Update and Create or Update use n8n's field mapper (typed fields and choice lists from `getFields`); Delete by ID or filters (never without one); other actions with Params (JSON). Discovery is cached for 15 minutes per site and identity, with at most two concurrent requests per site. Bulk actions (replace, mergeDuplicates, revert, …) and administrative entities (System, Setting, …) need *Show Advanced Entities and Actions*, enforced at run time too. Any Entity always runs with the credential it discovered with, so Base URL Override and Runtime Bearer Token are not offered for it.
+- Every request sends `X-Requested-With: XMLHttpRequest` (required by CiviCRM's CSRF check on the Authorization route).
+- The credential works in n8n's **HTTP Request** node (predefined credential type), on every route and with the site key. Selecting the "Custom API Call" option n8n adds to the operation lists stops with a pointer to that node instead of running.
+- Retries: once after HTTP 429 (honouring `Retry-After`, any action: the apirestlog guard rejects before the API runs) and once after 502/503 for read actions only.
+- Return All (built-ins, Dynamic Search, Any Entity) drops from pages of 500 to 100 when the site caps rows per call.
+- CiviCRM HTML error pages are reduced to their message.
+- Tests: 164 (131 unit + 33 live integration against CiviCRM 6.4.2, opt-in via `CIVI_IT_*` variables, including the site-key guard with a contact that has no "authenticate with …" permission), plus n8n end-to-end workflows in `test/e2e/`. CI now runs lint, build and tests on pull requests; pre-release versions publish to the npm `next` tag.
+
+### Fixed
+- Credential Base URL placeholder pointed at `…/civicrm`, which produced `/civicrm/civicrm/ajax/api4` URLs; it now shows the site root and a trailing slash is tolerated.
+- The 12 n8n lint errors (`@ts-ignore`, unused variables, `any`).
+- `package.json` `main` pointed to a file the build never produces.
+
+### Security
+- The API key no longer appears in request parameters (the 3.x JWT contact lookup filtered on `api_key`, which request logs such as apirestlog stored in plain text).
+- Cache keys for JWTs, discovery and contact IDs are SHA-256 hashes of site and credential, never the raw key.
+
+### Removed
+- The inert `actions` block in the node description (about 400 lines n8n never read).
+- Root `test-*.js` JWT experiment scripts and the six JWT documents (replaced by AUTHENTICATION.md and the integration suite), `DOCUMENTATION_INDEX.md`, `reload-in-docker.md` (see DEVELOPMENT.md), `package-lock.json` (pnpm is the package manager) and the tracked `dist/` file.
+
+---
+
 ## [3.3.0] — 2026-09-29
 
 ### Added
