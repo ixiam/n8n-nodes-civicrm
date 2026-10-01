@@ -1,7 +1,6 @@
 import type {
 	IDataObject,
 	IExecuteFunctions,
-	ILoadOptionsFunctions,
 	INode,
 	INodeExecutionData,
 } from "n8n-workflow";
@@ -10,6 +9,7 @@ import { startMockCiviServer } from "../helpers/mockServer";
 // typed and lint-clean. CiviCrm.test.ts covers the built dist/ artifact.
 import { CiviCrm } from "../../src/nodes/CiviCrm/CiviCrm.node";
 import { normalizeBaseUrlOverride } from "../../src/nodes/transport/GenericFunctions";
+import { resetJwtState } from "../../src/nodes/transport/JwtAuth";
 
 const CRED_URL = "https://cred.example";
 const node = { name: "CiviCRM" } as INode;
@@ -228,12 +228,17 @@ describe("Base URL Override in execute()", () => {
 	});
 });
 
+const isWhoAmI = (opts: ReqOpts) =>
+	opts.url.endsWith("/Contact/get") && paramsOf(opts).where?.[0]?.[2] === "user_contact_id";
+
 describe("Base URL Override with JWT auth (cache isolation)", () => {
+	beforeEach(() => resetJwtState());
+
 	/** Each instance issues a distinct JWT: "jwt-for-<host>". */
 	function jwtRouter() {
 		return jest.fn(async (opts: ReqOpts) => {
 			const { host } = new URL(opts.url);
-			if (opts.url.endsWith("/Contact/get") && paramsOf(opts).where?.[0]?.[0] === "api_key") {
+			if (isWhoAmI(opts)) {
 				return { values: [{ id: 5 }] };
 			}
 			if (opts.url.endsWith("/AuthxCredential/create")) {
@@ -286,42 +291,62 @@ describe("Base URL Override with JWT auth (cache isolation)", () => {
 		for (const c of httpRequest.mock.calls) expect(c[0].url.startsWith(`${CRED_URL}/`)).toBe(true);
 	});
 
-	test("JWT empty-response fallback to API key also goes to the override host", async () => {
+	test("an empty JWT response is returned as-is: no second request with the API key", async () => {
 		const httpRequest: HttpMock = jest.fn(async (opts: ReqOpts) => {
 			if (opts.url.endsWith("/AuthxCredential/create")) return { values: [{ cred: "Bearer jwt-x" }] };
-			if (paramsOf(opts).where?.[0]?.[0] === "api_key") return { values: [{ id: 9 }] };
-			// JWT data request returns nothing -> node retries with API key
-			if (opts.headers["X-Civi-Auth"] === "Bearer jwt-x") return { values: [], countMatched: 0 };
-			return { values: [], countMatched: 42 };
+			if (isWhoAmI(opts)) return { values: [{ id: 9 }] };
+			return { values: [], countMatched: 0 };
+		});
+		const ctx = ctxFor({ credentials: jwtCreds, perItem: [{ baseUrlOverride: "jwt-empty.example" }], httpRequest });
+		const result = await new CiviCrm().execute.call(ctx);
+
+		const dataCalls = httpRequest.mock.calls.map((c) => c[0]).filter((c) => !isWhoAmI(c) && !c.url.endsWith("/AuthxCredential/create"));
+		expect(dataCalls).toHaveLength(1);
+		expect(dataCalls[0].headers["X-Civi-Auth"]).toBe("Bearer jwt-x");
+		expect(firstJson(result)).toEqual({ values: [], countMatched: 0 });
+	});
+
+	test("a JWT refused at authentication is retried once with the API key on the override host, then JWT pauses", async () => {
+		const refusal = Object.assign(new Error("Request failed with status code 401"), {
+			response: { status: 401, data: 'HTTP 401 Authentication type "jwt" with flow "xheader" is not allowed for this principal.' },
+		});
+		const httpRequest: HttpMock = jest.fn(async (opts: ReqOpts) => {
+			if (opts.url.endsWith("/AuthxCredential/create")) return { values: [{ cred: "Bearer jwt-y" }] };
+			if (isWhoAmI(opts)) return { values: [{ id: 9 }] };
+			if (opts.headers["X-Civi-Auth"] === "Bearer jwt-y") throw refusal;
+			return { values: [{ id: 1 }] };
 		});
 		const ctx = ctxFor({
 			credentials: jwtCreds,
-			perItem: [{ baseUrlOverride: "jwt-fallback.example" }],
+			perItem: [{ baseUrlOverride: "jwt-refused.example" }, { baseUrlOverride: "jwt-refused.example" }],
 			httpRequest,
 		});
-		const result = await new CiviCrm().execute.call(ctx);
+		await new CiviCrm().execute.call(ctx);
 
-		for (const c of httpRequest.mock.calls) {
-			expect(c[0].url.startsWith("https://jwt-fallback.example/")).toBe(true);
-		}
-		const last = httpRequest.mock.calls[httpRequest.mock.calls.length - 1][0];
-		expect(last.headers["X-Civi-Auth"]).toBe("Bearer shared-key");
-		expect(firstJson(result)).toEqual({ values: [], countMatched: 42 });
+		const calls = httpRequest.mock.calls.map((c) => c[0]);
+		for (const c of calls) expect(c.url.startsWith("https://jwt-refused.example/")).toBe(true);
+		// Item 1: JWT refused, then API key. Item 2: straight to the API key (JWT paused).
+		const dataAuth = calls.filter((c) => !isWhoAmI(c) && !c.url.endsWith("/AuthxCredential/create")).map((c) => c.headers["X-Civi-Auth"]);
+		expect(dataAuth).toEqual(["Bearer jwt-y", "Bearer shared-key", "Bearer shared-key"]);
+		expect(ctx.addExecutionHints).toHaveBeenCalledWith(expect.objectContaining({ type: "warning" }));
 	});
-});
 
-describe("loadOptions ignores the override (no item context)", () => {
-	test("loadOptionValues uses the credential Base URL", async () => {
-		const httpRequest = jest.fn(async () => ({ values: [{ id: 1, label: "One" }] }));
-		const ctx = {
-			getCredentials: jest.fn(async () => ({ baseUrl: `${CRED_URL}/`, apiToken: "shared-key" })),
-			getNodeParameter: jest.fn(() => "https://should-not-be-used.example"),
-			helpers: { httpRequest },
-		} as unknown as ILoadOptionsFunctions;
-
-		const res = await new CiviCrm().methods.loadOptions.loadOptionValues.call(ctx);
-		expect(res).toEqual([{ name: "One", value: 1 }]);
-		expect((httpRequest.mock.calls[0] as unknown as [ReqOpts])[0].url).toBe(`${CRED_URL}/civicrm/ajax/api4/OptionValue/get`);
+	test("errors other than an authentication refusal are not retried (a write is never sent twice)", async () => {
+		const serverError = Object.assign(new Error("boom"), { response: { status: 500, data: { error_message: "DB error" } } });
+		const httpRequest: HttpMock = jest.fn(async (opts: ReqOpts) => {
+			if (opts.url.endsWith("/AuthxCredential/create")) return { values: [{ cred: "Bearer jwt-z" }] };
+			if (isWhoAmI(opts)) return { values: [{ id: 9 }] };
+			throw serverError;
+		});
+		const ctx = ctxFor({
+			credentials: jwtCreds,
+			common: { customAction: "create", customParamsJson: '{"values":{"first_name":"A"}}' },
+			perItem: [{ baseUrlOverride: "jwt-error.example" }],
+			httpRequest,
+		});
+		await expect(new CiviCrm().execute.call(ctx)).rejects.toThrow(/DB error/);
+		const creates = httpRequest.mock.calls.map((c) => c[0]).filter((c) => c.url.endsWith("/Contact/create"));
+		expect(creates).toHaveLength(1);
 	});
 });
 

@@ -3,7 +3,7 @@ import type { IExecuteFunctions, INodeExecutionData } from "n8n-workflow";
 // `n8n-node build` does not emit .d.ts declaration files for dist/, so this is
 // imported via `require` (typed as `any`) rather than a typed ES `import` to
 // avoid a TS7016 "could not find a declaration file" error in ts-jest.
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { CiviCrm } = require("../../dist/src/nodes/CiviCrm/CiviCrm.node");
 
 /**
@@ -15,11 +15,11 @@ const { CiviCrm } = require("../../dist/src/nodes/CiviCrm/CiviCrm.node");
  * make multiple requests can be asserted against distinct payloads.
  */
 function mockExecuteContext(
-	items: any[],
-	params: Record<string, any> = {},
-	httpResponses?: any[],
+	items: INodeExecutionData[],
+	params: Record<string, unknown> = {},
+	httpResponses?: unknown[],
 ): IExecuteFunctions {
-	const defaultParams: Record<string, any> = {
+	const defaultParams: Record<string, unknown> = {
 		resource: "contact",
 		operation: "getMany",
 		returnAll: true,
@@ -40,15 +40,15 @@ function mockExecuteContext(
 
 	return {
 		// Mock de parámetros del nodo
-		getNodeParameter: jest.fn((name: string, _index: number, fallback: any) => {
+		getNodeParameter: jest.fn((name: string, _index: number, fallback: unknown) => {
 			return Object.prototype.hasOwnProperty.call(merged, name) ? merged[name] : fallback;
-		}) as any,
+		}) as unknown as IExecuteFunctions["getNodeParameter"],
 
 		// Mock de credenciales
 		getCredentials: jest.fn(async () => ({
 			baseUrl: "https://mock",
 			apiToken: "123",
-		})) as any,
+		})) as unknown as IExecuteFunctions["getCredentials"],
 
 		// Mock de llamadas HTTP (API4)
 		helpers: {
@@ -291,7 +291,7 @@ describe("CiviCRM Node (n8n validation tests)", () => {
 			expect(call.headers.Authorization).toBeUndefined();
 		});
 
-		test("runtime JWT honors the credential's jwtHeaderMode ('both' sends X-Civi-Auth and Authorization)", async () => {
+		test("legacy jwtHeaderMode 'both' (3.x credential) sends the runtime JWT via X-Civi-Auth only", async () => {
 			const node = new CiviCrm();
 
 			const ctx = mockExecuteContext(
@@ -313,8 +313,26 @@ describe("CiviCRM Node (n8n validation tests)", () => {
 			await node.execute.call(ctx);
 
 			const call = (ctx.helpers.httpRequest as jest.Mock).mock.calls[0][0];
+			// CiviCRM evaluates X-Civi-Auth first and never falls back to Authorization.
 			expect(call.headers["X-Civi-Auth"]).toBe("Bearer runtime.jwt.for.contact-49");
-			expect(call.headers.Authorization).toBe("Bearer runtime.jwt.for.contact-49");
+			expect(call.headers.Authorization).toBeUndefined();
+		});
+
+		test("legacy jwtHeaderMode 'authorization' (3.x credential) sends the runtime JWT via Authorization", async () => {
+			const node = new CiviCrm();
+			const ctx = mockExecuteContext(
+				[{ json: {} }],
+				{ resource: "customApi", operation: "raw", customEntity: "Contact", customAction: "get", customParamsJson: "{}", runtimeBearerToken: "rt" },
+				[{ values: [] }],
+			);
+			(ctx.getCredentials as jest.Mock).mockResolvedValue({ baseUrl: "https://mock", apiToken: "123", jwtHeaderMode: "authorization" });
+
+			await node.execute.call(ctx);
+
+			const call = (ctx.helpers.httpRequest as jest.Mock).mock.calls[0][0];
+			expect(call.headers.Authorization).toBe("Bearer rt");
+			expect(call.headers["X-Civi-Auth"]).toBeUndefined();
+			expect(call.headers["X-Requested-With"]).toBe("XMLHttpRequest");
 		});
 
 		test("Custom API Call (raw): uses the runtime JWT as-is instead of the credential", async () => {
@@ -454,12 +472,12 @@ describe("CiviCRM Node (n8n validation tests)", () => {
 		// fixed for issue #30). Resetting the module per test keeps each test's
 		// call-count assertions deterministic regardless of execution order or
 		// what other tests in this file touched "contact" create/update first.
-		let FreshCiviCrm: any;
+		let FreshCiviCrm: typeof CiviCrm;
 
 		beforeEach(() => {
 			jest.resetModules();
 			jest.isolateModules(() => {
-				// eslint-disable-next-line @typescript-eslint/no-var-requires
+				// eslint-disable-next-line @typescript-eslint/no-require-imports
 				FreshCiviCrm = require("../../dist/src/nodes/CiviCrm/CiviCrm.node").CiviCrm;
 			});
 		});
@@ -578,7 +596,7 @@ describe("CiviCRM Node (n8n validation tests)", () => {
 				],
 			);
 
-			await expect(node.execute.call(ctx)).rejects.toThrow("Failed to create contact.");
+			await expect(node.execute.call(ctx)).rejects.toThrow("Failed to create Contact");
 			// Location lookup + the single denied create call - no retry, no
 			// further calls (e.g. no attempt at the final re-fetch).
 			expect(ctx.helpers.httpRequest as jest.Mock).toHaveBeenCalledTimes(2);
