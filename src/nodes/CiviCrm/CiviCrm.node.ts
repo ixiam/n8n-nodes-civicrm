@@ -16,6 +16,14 @@ import {
 } from '../transport/GenericFunctions';
 import { resourceProp, operationProp, customApiOperationProp } from './descriptions/resources';
 import { genericFields, upsertFields } from './descriptions/generic';
+import { anyEntityOperationProp, anyEntityProperties } from './anyEntity/description';
+import { executeAnyEntity } from './anyEntity/execute';
+import {
+	getAnyEntities,
+	getAnyEntityActions,
+	getAnyEntityFields,
+	getAnyEntityMappingColumns,
+} from './anyEntity/methods';
 
 /* ============================================================================
    RESOURCES
@@ -27,7 +35,8 @@ type Resource =
 	| 'group'
 	| 'relationship'
 	| 'activity'
-	| 'customApi';
+	| 'customApi'
+	| 'anyEntity';
 
 type Operation = 'get' | 'getMany' | 'create' | 'update' | 'delete';
 
@@ -37,7 +46,7 @@ const LOCATION_TYPE_OPTIONS: INodePropertyOptions[] = ['Home', 'Work', 'Main', '
 	value: name,
 }));
 
-const ENTITY_MAP: Record<Exclude<Resource, 'customApi'>, string> = {
+const ENTITY_MAP: Record<Exclude<Resource, 'customApi' | 'anyEntity'>, string> = {
 	contact: 'Contact',
 	membership: 'Membership',
 	group: 'Group',
@@ -111,10 +120,10 @@ export class CiviCrm implements INodeType {
 		icon: 'file:civicrm.svg',
 		group: ['transform'],
 		version: 1,
-		description: 'Interact with CiviCRM API v4: contacts, memberships, groups and any entity through Custom API Call',
+		description: 'Interact with CiviCRM API v4: contacts, memberships, groups and any other entity on the site',
 		defaults: { name: 'CiviCRM' },
 		subtitle:
-			'={{{"get":"Get","getMany":"Get Many","create":"Create","update":"Update","delete":"Delete","raw":"Raw API Call","getFields":"List Fields","search":"Dynamic Search"}[$parameter["operation"]] + ": " + {"contact":"Contact","membership":"Membership","group":"Group","relationship":"Relationship","activity":"Activity","customApi":"Custom API Call"}[$parameter["resource"]]}}',
+			'={{$parameter["resource"] === "anyEntity" ? (($parameter["operation"] === "other" ? $parameter["anyAction"] : {"get":"Get Many","create":"Create","update":"Update","save":"Create or Update","delete":"Delete"}[$parameter["operation"]]) + ": " + $parameter["anyEntity"]) : ({"get":"Get","getMany":"Get Many","create":"Create","update":"Update","delete":"Delete","raw":"Raw API Call","getFields":"List Fields","search":"Dynamic Search"}[$parameter["operation"]] + ": " + {"contact":"Contact","membership":"Membership","group":"Group","relationship":"Relationship","activity":"Activity","customApi":"Custom API Call"}[$parameter["resource"]])}}',
 		inputs: [NodeConnectionTypes.Main],
 		outputs: [NodeConnectionTypes.Main],
 
@@ -128,6 +137,7 @@ export class CiviCrm implements INodeType {
 			resourceProp,
 			operationProp,
 			customApiOperationProp,
+			anyEntityOperationProp,
 
 			//
 			// CONTACT TYPE
@@ -355,6 +365,7 @@ export class CiviCrm implements INodeType {
 					show: {
 						operation: ['get', 'getMany', 'getFields', 'search', 'raw', 'create', 'update', 'delete'],
 					},
+					hide: { resource: ['anyEntity'] },
 				},
 			},
 
@@ -373,7 +384,14 @@ export class CiviCrm implements INodeType {
 					'Useful for many instances sharing the same API key. Can be set by expression, e.g. ' +
 					'={{ $json.instance_url }}. If no scheme is given, https:// is assumed; only http(s) is allowed. ' +
 					"Leave empty to use the credential's Base URL.",
+				// Any Entity discovers with the credential's site, so it always runs there too.
+				displayOptions: { hide: { resource: ['anyEntity'] } },
 			},
+
+			//
+			// ANY ENTITY (discovered at runtime)
+			//
+			...anyEntityProperties,
 
 			//
 			// DYNAMIC FIELDS
@@ -381,6 +399,15 @@ export class CiviCrm implements INodeType {
 			...genericFields,
 			...upsertFields,
 		],
+	};
+
+	/* ============================================================================
+	   METHODS: Any Entity discovery
+	============================================================================ */
+
+	methods = {
+		loadOptions: { getAnyEntities, getAnyEntityActions, getAnyEntityFields },
+		resourceMapping: { getAnyEntityMappingColumns },
 	};
 
 	/* ============================================================================
@@ -398,14 +425,20 @@ export class CiviCrm implements INodeType {
 		if ((operation as string) === '__CUSTOM_API_CALL__') {
 			throw new NodeOperationError(
 				this.getNode(),
-				'"Custom API Call" is handled by n8n\'s HTTP Request node: add one and choose Authentication > Predefined Credential Type > CiviCRM API. Or use this node\'s "Custom API Call" resource.',
+				'"Custom API Call" is handled by n8n\'s HTTP Request node: add one and choose Authentication > Predefined Credential Type > CiviCRM API. Or use this node\'s "Custom API Call" or "Any Entity" resource.',
 			);
 		}
 
-		const entity = resource === 'customApi' ? '' : ENTITY_MAP[resource];
+		const entity = resource === 'customApi' || resource === 'anyEntity' ? '' : ENTITY_MAP[resource];
 
 		for (let i = 0; i < items.length; i++) {
 			try {
+			// Any Entity: entity/action discovered with the credential, executed with it too.
+			if (resource === 'anyEntity') {
+				out.push(...(await executeAnyEntity.call(this, i, items[i])));
+				continue;
+			}
+
 			// Per-execution JWT for a specific real user (issue #25 - permissions
 			// by real user via Authx), read once per item so it can come from an
 			// expression like ={{ $json.user_jwt }}. Threaded into every

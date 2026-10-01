@@ -12,9 +12,10 @@ export const resourceProp: INodeProperties = {
 	noDataExpression: true,
 	default: 'contact',
 	description:
-		'The entity to operate on. "Custom API Call" sends hand-written APIv4 calls to any other entity.',
+		'The entity to operate on. "Any Entity" lists every entity and action the site offers; "Custom API Call" sends hand-written APIv4 calls.',
 	options: [
 		{ name: 'Activity', value: 'activity' },
+		{ name: 'Any Entity', value: 'anyEntity', description: 'Entities and actions discovered from the connected site' },
 		{ name: 'Contact', value: 'contact' },
 		{ name: 'Custom API Call', value: 'customApi' },
 		{ name: 'Group', value: 'group' },

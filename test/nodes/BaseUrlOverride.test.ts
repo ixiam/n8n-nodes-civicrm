@@ -1,6 +1,7 @@
 import type {
 	IDataObject,
 	IExecuteFunctions,
+	ILoadOptionsFunctions,
 	INode,
 	INodeExecutionData,
 } from "n8n-workflow";
@@ -10,6 +11,7 @@ import { startMockCiviServer } from "../helpers/mockServer";
 import { CiviCrm } from "../../src/nodes/CiviCrm/CiviCrm.node";
 import { normalizeBaseUrlOverride } from "../../src/nodes/transport/GenericFunctions";
 import { resetJwtState } from "../../src/nodes/transport/JwtAuth";
+import { clearDiscoveryCache } from "../../src/nodes/transport/Discovery";
 
 const CRED_URL = "https://cred.example";
 const node = { name: "CiviCRM" } as INode;
@@ -127,14 +129,14 @@ describe("normalizeBaseUrlOverride", () => {
 });
 
 describe("Base URL Override in execute()", () => {
-	test("parameter is defined with the expected name/default and no displayOptions (visible everywhere)", () => {
+	test("parameter is shown for every resource except Any Entity (which always runs on the credential's site)", () => {
 		const prop = new CiviCrm().description.properties.find((p) => p.name === "baseUrlOverride");
 		if (!prop) throw new Error("baseUrlOverride property not found");
 		expect(prop.displayName).toBe("Base URL Override");
 		expect(prop.type).toBe("string");
 		expect(prop.default).toBe("");
 		expect(prop.placeholder).toBe("https://example.org");
-		expect(prop.displayOptions).toBeUndefined();
+		expect(prop.displayOptions).toEqual({ hide: { resource: ["anyEntity"] } });
 	});
 
 	test("empty override -> credential Base URL (unchanged behavior)", async () => {
@@ -347,6 +349,24 @@ describe("Base URL Override with JWT auth (cache isolation)", () => {
 		await expect(new CiviCrm().execute.call(ctx)).rejects.toThrow(/DB error/);
 		const creates = httpRequest.mock.calls.map((c) => c[0]).filter((c) => c.url.endsWith("/Contact/create"));
 		expect(creates).toHaveLength(1);
+	});
+});
+
+describe("Any Entity discovery ignores the override (no item context)", () => {
+	test("getAnyEntities uses the credential Base URL", async () => {
+		clearDiscoveryCache();
+		const httpRequest = jest.fn(async () => ({ values: [{ name: "Contact", title: "Contact" }], count: 1, countFetched: 1 }));
+		const ctx = {
+			getCredentials: jest.fn(async () => ({ baseUrl: `${CRED_URL}/`, apiToken: "shared-key" })),
+			getCurrentNodeParameter: jest.fn(() => false),
+			getNodeParameter: jest.fn(() => "https://should-not-be-used.example"),
+			getNode: () => node,
+			helpers: { httpRequest },
+		} as unknown as ILoadOptionsFunctions;
+
+		const res = await new CiviCrm().methods.loadOptions.getAnyEntities.call(ctx);
+		expect(res).toEqual([{ name: "Contact", value: "Contact", description: undefined }]);
+		expect((httpRequest.mock.calls[0] as unknown as [ReqOpts])[0].url).toBe(`${CRED_URL}/civicrm/ajax/api4/Entity/get`);
 	});
 });
 
