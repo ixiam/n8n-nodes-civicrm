@@ -4,6 +4,22 @@ All notable changes to `@ixiam/n8n-nodes-civicrm` are documented here.
 
 ---
 
+## [3.3.1] — 2026-10-08
+
+### Fixed
+- **CiviCRM's error reason was lost.** When CiviCRM rejected an APIv4 call, the node passed the raw HTTP error to `NodeApiError`, which replaces the message with n8n's generic text per status code (e.g. `The service was not able to process your request` for a 500) and never surfaces the response body. CiviCRM's `error_message`/`error_code` were dropped, so neither the user nor the logs could tell what failed (seen on a production `Group.create` against CiviCRM 6.4.2).
+  - The thrown error's `message` is now n8n's status message plus ` | CiviCRM: <error_message>` (prefix unchanged, so existing checks like `/^Forbidden/` keep matching), and its `description` adds HTTP code, `error_code` and `error_id`. Example: `The service was not able to process your request | CiviCRM: Mandatory values missing from Api4 Group::create: name, title, frontend_title`.
+  - With *Continue On Fail*, the output item keeps `error` (same string as the message) and adds `civicrm_error: { http_code, error_code, error_message, error_id, status, db_error?, body? }`. Errors without an HTTP response (network) still produce the plain `{ error }` item.
+  - Non-JSON bodies (nginx/PHP HTML error pages) become a tag-stripped excerpt of at most 300 characters. `error_message` is capped at 1000 characters; `debug.sql`/`debug.backtrace` are never copied.
+  - CiviCRM hides the reason from users without *view debug output* (`Sorry an error occurred... (Error ID: X)`); the Error ID is extracted into `civicrm_error.error_id` so it can be looked up in CiviCRM's log.
+- **Security:** the raw HTTP error (whose request config carries the `X-Civi-Auth`/`Authorization` headers) is no longer attached to the `NodeApiError`; only a sanitized object is. Known secrets (API key, credential JWT, runtime bearer token), any `Bearer`/`Basic` token, JWT-shaped strings and `api_key=`/`token=` parameters are redacted from every text kept. The JWT to API key fallback hints no longer dump the full response body either.
+
+### Added
+- `buildCiviCrmApiError()`, `extractCiviCrmErrorDetails()`, `summarizeCiviCrmError()`, `redactSecrets()` and `CIVICRM_ERROR_SEPARATOR` exported from `transport/GenericFunctions.ts`.
+- `test/nodes/ErrorDetails.test.ts`: 15 tests (APIv4 JSON body, JSON body as a string, hidden-detail answer with and without an `error_id` field, debug/backtrace/size capping, HTML body, empty body, network error, non-HTTP errors, no credential leak in the item or the thrown error, redaction of secrets echoed by CiviCRM). Verified against a real local CiviCRM 6.16.1 (duplicate group name, nonexistent `saved_search_id`, missing title, invalid field; admin and a user without *view debug output*).
+
+---
+
 ## [3.3.0] — 2026-09-29
 
 ### Added
