@@ -1,0 +1,215 @@
+{
+  "name": "E2E 4.0 - Built-in Contact lifecycle",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "contact",
+        "contactType": "Individual",
+        "emailLocation": "Main",
+        "phoneLocation": "Main",
+        "addressLocation": "Main",
+        "operation": "create",
+        "fields": {
+          "field": [
+            {
+              "fieldName": "first_name",
+              "fieldValue": "E2E"
+            },
+            {
+              "fieldName": "last_name",
+              "fieldValue": "=Run{{ $now.toMillis() }}"
+            },
+            {
+              "fieldName": "email",
+              "fieldValue": "=e2e{{ $now.toMillis() }}@example.com"
+            },
+            {
+              "fieldName": "phone",
+              "fieldValue": "+34 600 111 222"
+            },
+            {
+              "fieldName": "address.city",
+              "fieldValue": "Bilbao"
+            },
+            {
+              "fieldName": "birth_date",
+              "fieldValue": "15/06/1985"
+            }
+          ]
+        }
+      },
+      "name": "Create Contact",
+      "type": "@ixiam/n8n-nodes-civicrm.civiCrm",
+      "typeVersion": 1,
+      "position": [
+        200,
+        0
+      ],
+      "credentials": {
+        "civiCrmApi": {
+          "name": "admin-pass-header"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "contact",
+        "contactType": "Individual",
+        "emailLocation": "Main",
+        "phoneLocation": "Main",
+        "addressLocation": "Main",
+        "operation": "update",
+        "id": "={{ $json.id }}",
+        "fields": {
+          "field": [
+            {
+              "fieldName": "first_name",
+              "fieldValue": "E2E-updated"
+            }
+          ]
+        }
+      },
+      "name": "Update Contact",
+      "type": "@ixiam/n8n-nodes-civicrm.civiCrm",
+      "typeVersion": 1,
+      "position": [
+        400,
+        0
+      ],
+      "credentials": {
+        "civiCrmApi": {
+          "name": "admin-key-xheader"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "contact",
+        "operation": "get",
+        "id": "={{ $json.id }}"
+      },
+      "name": "Get Contact",
+      "type": "@ixiam/n8n-nodes-civicrm.civiCrm",
+      "typeVersion": 1,
+      "position": [
+        600,
+        0
+      ],
+      "credentials": {
+        "civiCrmApi": {
+          "name": "limited-key-param"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "contact",
+        "operation": "delete",
+        "id": "={{ $json.id }}"
+      },
+      "name": "Delete Contact",
+      "type": "@ixiam/n8n-nodes-civicrm.civiCrm",
+      "typeVersion": 1,
+      "position": [
+        800,
+        0
+      ],
+      "credentials": {
+        "civiCrmApi": {
+          "name": "admin-key-xheader"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "customApi",
+        "operation": "raw",
+        "customEntity": "Contact",
+        "customAction": "delete",
+        "customParamsJson": "={{ JSON.stringify({ where: [[\"id\", \"=\", $json.deleted_id], [\"is_deleted\", \"=\", true]], useTrash: false }) }}"
+      },
+      "name": "Purge Contact",
+      "type": "@ixiam/n8n-nodes-civicrm.civiCrm",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        0
+      ],
+      "credentials": {
+        "civiCrmApi": {
+          "name": "admin-key-xheader"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Create Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Contact": {
+      "main": [
+        [
+          {
+            "node": "Update Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Contact": {
+      "main": [
+        [
+          {
+            "node": "Get Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Contact": {
+      "main": [
+        [
+          {
+            "node": "Delete Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Contact": {
+      "main": [
+        [
+          {
+            "node": "Purge Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

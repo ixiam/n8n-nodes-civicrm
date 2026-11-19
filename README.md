@@ -7,7 +7,7 @@
 Community Node for **CiviCRM API v4** (Civi-Go compatible)  
 Developed and maintained by **Ixiam Global Solutions**.
 
-This node enables full integration between **n8n** and **CiviCRM API v4**, supporting create/update/delete operations, smart field mapping, dynamic location types, and advanced filtering on GET operations.
+This node integrates **n8n** with **CiviCRM API v4**: built-in operations for contacts, memberships, groups, relationships and activities, plus **Any Entity**, which discovers every entity and action the connected site offers. It authenticates with an API key or a username and password, on any AuthX route, optionally through short-lived JWTs.
 
 ---
 
@@ -34,164 +34,54 @@ Download: https://civicrm.org/download
 ```
 
 3. Approve installation and enable Community Nodes.
+   To try a pre-release (e.g. 4.0.0-dev builds), enter `@ixiam/n8n-nodes-civicrm@next` instead.
 4. If running n8n via Docker, restart/rebuild for the node to load.
 
 ---
 
 ## 🔐 Credentials
 
-The node supports two authentication modes:
-
-### **1. Standard API Key Authentication**
-Simple and reliable for most use cases.
-
 | Field | Description |
 |-------|-------------|
-| **Base URL** | Root URL of CiviCRM. Example: `https://crm.example.org` |
-| **API Token** | Your API Key from CiviCRM (sent as `X-Civi-Auth: Bearer <token>`) |
+| **Base URL** | Site root, e.g. `https://crm.example.org` (without `/civicrm`) |
+| **Authentication Type** | **API Key** or **Username and Password** (CMS login) |
+| **Send Credentials Via** | `X-Civi-Auth` header (recommended), `Authorization` header, or `_authx` request parameter |
+| **Site Key** | Optional; sent as `X-Civi-Key` for sites that rely on AuthX's site-key guard |
+| **Use Short-Lived JWT** | Optional; exchanges the credential for a JWT (`AuthxCredential.create`) and sends that instead |
 
-### **2. JWT Authentication with Auto-Resolve (v3.0+)**
-Time-bounded tokens for enhanced security. **Contact ID is automatically resolved** from your API Key.
+Click **Test credential** to sign in exactly as the node will. The route you choose must accept your credential type in CiviCRM's AuthX settings (**Administer → System Settings → Authentication**).
 
-| Field | Description |
-|-------|-------------|
-| **Base URL** | Root URL of CiviCRM |
-| **API Token** | Your API Key (used to resolve Contact ID & generate JWT) |
-| **Enable JWT Auth** | Toggle to enable time-bounded JWT tokens |
-| **JWT Header Mode** | Where to send JWT (X-Civi-Auth recommended) |
-
-#### How JWT Auto-Resolve Works
-
-1. When making an API call, the node automatically:
-   - Resolves your Contact ID from your API Key
-   - Generates a time-bounded JWT token (1 hour default)
-   - Caches both for efficiency
-
-2. The JWT is used for API requests, with **automatic fallback to API Key** if:
-   - JWT generation fails
-   - JWT returns empty results
-   - JWT expires
-
-3. **Zero manual configuration** - Contact ID is detected automatically
-
-> **Note on warnings vs. results:** When JWT auth is enabled but the token can't be obtained (e.g. AuthX disabled or misconfigured on the CiviCRM side), the node still returns data — it silently retries the same request with the API Key. You'll see a **warning in the node's output pane** explaining why JWT wasn't used, but the workflow does not fail and the query results are still shown. This is intentional: JWT failures never break a workflow, they only fall back to API Key auth and surface a non-blocking warning.
-
-> **Troubleshooting "JWT authentication could not be obtained (no token returned by CiviCRM)":** This message covers several distinct failures on the CiviCRM side (Contact lookup by API Key failed, or `AuthxCredential.create` was denied), so it doesn't say which one occurred. The most common cause is a missing permission: the Contact that owns the API Key must have the **"AuthX: Generate new JWT credentials for other users via the API"** permission on their role — see [JWT Setup Requirements](#jwt-setup-requirements) above. To confirm which step is failing, call `Contact.get` (filtered by `api_key`) and `AuthxCredential.create` directly against your CiviCRM instance and check the HTTP status/response of each.
-
-#### JWT Setup Requirements
-
-**CiviCRM Extensions & Settings:**
-- ✓ AuthX extension enabled (CiviCRM 5.48+)
-- ✓ API Key assigned to a Contact record
-- ✓ The Contact's role has the **"AuthX: Generate new JWT credentials for other users via the API"** permission (`generate any authx credential`) — under **Administer → Users and Permissions → Permissions**. Without it, `AuthxCredential.create` returns `403 Authorization failed` and the node silently falls back to API Key auth. Note that having "Administrator"/`administer CiviCRM` does **not** grant this by itself — it must be checked explicitly for the role.
-
-**CiviCRM Authentication Configuration**
-
-The following settings must be enabled in CiviCRM's Authentication configuration:
-
-```
-Administer → System Settings → Authentication
-├─ AuthX Header Authentication: ✓ ENABLED
-├─ AuthX XHeader Support: ✓ ENABLED
-├─ Credential Types: Include 'jwt'
-└─ XHeader Name: Set to 'X-Civi-Auth' (default)
-```
-
-**Settings in civicrm.settings.php:**
-```php
-// Enable AuthX for JWT tokens
-define('CIVICRM_AUTHX_XHEADER_CRED', json_encode(['jwt']));
-
-// Optional: Configure JWT signing keys (auto-generated)
-// define('CIVICRM_AUTHX_SIGN_KEY', 'your-signing-key');
-```
-
-**How to Enable:**
-1. Go to **Administer → System Settings → Authentication**
-2. Find **AuthX Settings** section
-3. Check: `✓ Enable X-Header Authentication`
-4. Check: `✓ JWT in X-Civi-Auth header`
-5. Verify **Header name**: `X-Civi-Auth`
-6. **Save** configuration
-
-#### JWT Token Rotation & Security
-
-**Token Lifetime & Auto-Refresh:**
-- JWT tokens auto-expire after 1 hour (configurable in n8n credential)
-- n8n automatically refreshes expired tokens (transparent to workflows)
-- No manual intervention needed
-
-**Security Best Practices:**
-
-| Action | Frequency | Reason |
-|--------|-----------|--------|
-| **Rotate API Keys** | Every 90 days | Limits exposure window if compromised |
-| **Review AuthX Logs** | Monthly | Detect unauthorized access attempts |
-| **Monitor JWT Usage** | Real-time | Alert on unusual patterns |
-| **Update CiviCRM** | As released | Includes security patches |
-| **Audit n8n Workflows** | Quarterly | Verify only needed credentials used |
-
-**When to Regenerate Credentials:**
-- ✅ Regular security rotation (quarterly)
-- ✅ Suspected credential compromise
-- ✅ Staff member leaves organization
-- ✅ n8n instance compromised
-- ✅ Failed authentication attempts detected
-
-**How to Revoke Access Immediately:**
-```
-Option 1: Disable JWT (n8n credential)
-├─ Uncheck "Enable JWT Auth" toggle
-└─ Node falls back to API Key (effective immediately)
-
-Option 2: Regenerate API Key (CiviCRM)
-├─ Go to Contact record
-├─ Regenerate API Key field
-└─ Old JWT & API Key become invalid instantly
-```
-
-**→ See [JWT_QUICKSTART.md](JWT_QUICKSTART.md) for 5-minute setup**  
-**→ See [JWT_AUTORESOLVE_SETUP.md](JWT_AUTORESOLVE_SETUP.md) for detailed configuration**
-
----
-
-After entering credentials, click **Test credentials** to validate the connection.
-
-### **Base URL Override (v3.3.0+)**
-
-One credential can target many CiviCRM instances that share the same API key. Set the node's **Base URL Override** field, usually with an expression, and every request for that item goes to that URL instead of the credential's Base URL.
-
-| Field | Description |
-|-------|-------------|
-| **Base URL Override** | Optional. Site root, without `/civicrm`. Example: `={{ $json.instance_url }}` |
-
-- Normalized per item: trimmed, trailing slashes removed, `https://` added when no scheme is given. Only `http://` and `https://` are accepted; anything else fails that item (honors *Continue On Fail*).
-- Applies to every request for the item, including sub-requests, the JWT flow and the API key fallback. JWT and contact ID caches are keyed by the effective URL, so a token from one instance is never sent to another.
-- Empty (the default, and every workflow saved before 3.3.0): the credential's Base URL is used, exactly as before.
-- Dropdowns in the editor (`loadOptions`) have no item context and always use the credential's Base URL.
-
-> ⚠️ The credential's API key is sent to whatever URL the override resolves to. Only feed it URLs your workflow controls (a fixed list, or a source only trusted people can edit).
+**→ See [AUTHENTICATION.md](AUTHENTICATION.md)** for the CiviCRM settings and permissions each option needs, JWT sessions, the Runtime Bearer Token, Base URL Override and troubleshooting.
 
 ---
 
 ## 📦 Supported Entities
 
-The node includes full API v4 support for the following entities:
-
-| Entity | Operations |
+| Resource | Operations |
 |--------|------------|
-| **Contact** | get, getMany, create, update, delete |
-| **Membership** | get, getMany, create, update, delete |
-| **Group** | get, getMany, create, update, delete |
-| **Relationship** | get, getMany, create, update, delete |
-| **Activity** | get, getMany, create, update, delete |
-| **Custom API Call** | full custom API4 request |
+| **Contact** | Get, Get Many, Create, Update, Delete (with emails, phones and addresses) |
+| **Membership** | Get, Get Many, Create, Update, Delete |
+| **Group** | Get, Get Many, Create, Update, Delete |
+| **Relationship** | Get, Get Many, Create, Update, Delete |
+| **Activity** | Get, Get Many, Create, Update, Delete |
+| **Any Entity** | Every entity and action the connected site offers, discovered at runtime (see below) |
+| **Custom API Call** | Raw API Call, List Fields, Dynamic Search for any APIv4 entity |
 
 ---
 
 ## 🧩 Key Features
 
-### **1. Dynamic Field Mapping**
+### **1. Any Entity (4.0+)**
+In n8n's node picker, search **CiviCRM** and choose one of the **Any Entity** actions (or set *Resource* to **Any Entity** on an existing node). Then pick any entity the site offers, including those added by extensions (for example Sendgrid or SearchKit), from a dropdown:
+
+- **Get Many**: choose the fields to return, filter (field, operator, value), sort, limit or return all.
+- **Create / Update / Create or Update**: n8n's field mapper lists the entity's fields with their types and choice lists; values can be mapped automatically from the input.
+- **Delete**: by record ID or by filters (never without one of them).
+- **Other Action**: any other action the entity offers (e.g. Contact → Get Duplicates), with APIv4 params as JSON.
+
+The lists come from CiviCRM (`Entity.get`, `getActions`, `getFields`) using the node's credential, so they show exactly what that credential may use; they are cached for 15 minutes. Actions that change data in bulk (replace, mergeDuplicates, revert, …) and administrative entities (System, Setting, …) appear only with **Show Advanced Entities and Actions**, and the same rule is enforced when the workflow runs.
+
+### **2. Dynamic Field Mapping (built-in entities)**
 Supports any standard or custom field:
 
 ```
@@ -200,39 +90,31 @@ last_name = Doe
 custom_45 = Blue
 ```
 
-### **2. Smart Email, Phone & Address Mapping**
+### **3. Smart Email, Phone & Address Mapping (Contact)**
 Two ways to set location-aware fields:
 
 **(A) Simple fields**
 ```
 email = test@example.org
-phone.mobile = 600123456
+phone = 600123456
+phone.phone_type_id = 2
 address.city = Barcelona
 ```
 
-**(B) Dynamic prefixes matched to CiviCRM Location Types**
+**(B) Prefixes matched to the site's Location Types**
 ```
 work.email = user@company.org
 billing.address.postal_code = 80331
 home.phone.phone_type_id = 2
 ```
 
-### **3. Default Location Type selectors**
-If no prefix is used, default types are applied.
+### **4. Default Location Type selectors**
+If no prefix is used, the selected default types apply (Home, Work, Main, Billing, Other).
 
-### **4. Birth Date Normalization**
-Accepted input formats:
+### **5. Birth Date Normalization**
+Accepted input formats: `YYYY-MM-DD`, `DD/MM/YYYY`, `DD-MM-YYYY`, `YYYY/MM/DD`, `YYYY.MM.DD`; stored as `YYYY-MM-DD`.
 
-- YYYY-MM-DD
-- DD/MM/YYYY
-- DD-MM-YYYY
-- YYYY/MM/DD
-- YYYY.MM.DD
-
-Auto-normalized to `YYYY-MM-DD`.
-
-### **5. GET MANY with JSON Filters**
-Example:
+### **6. Get Many with JSON Filters**
 ```json
 [
   ["first_name", "LIKE", "Ju%"],
@@ -241,73 +123,33 @@ Example:
 ]
 ```
 
-### **6. Custom API Call Mode**
-Example:
+### **7. Custom API Call**
+Set **Entity** (e.g. `Contribution`), **Action** (e.g. `get`) and **Params (JSON)**:
 ```json
-{
-  "entity": "Contact",
-  "action": "get",
-  "params": { "limit": 10 }
-}
+{ "select": ["id", "total_amount"], "where": [["contribution_status_id:name", "=", "Completed"]], "limit": 10 }
 ```
 
-### **7. JWT Authentication with Auto-Resolve (v3.0+)**
-Enhanced security with time-bounded tokens:
+### **8. Paging that respects the site**
+Return All fetches pages of 500 and drops to 100 automatically on sites that cap rows per call.
 
-**Features:**
-- ✨ **Automatic Contact ID Resolution** - No manual input needed
-- ✨ **Time-Bounded Tokens** - 1 hour default (configurable)
-- ✨ **Smart Fallback** - Automatically falls back to API Key if JWT insufficient
-- ✨ **Efficient Caching** - Contact ID & JWT cached for performance
-- ✨ **Zero Configuration** - Just enable "JWT Auth" toggle
-
-**Example Workflow:**
-```
-Enable JWT in credential
-    ↓
-Make API call
-    ↓
-[Automatic]
-├─ Resolve: Which Contact owns this API Key?
-├─ Generate: Time-bounded JWT token
-├─ Try: API call with JWT
-└─ Fallback: If empty, retry with API Key
-    ↓
-Get results
-```
-
-**Security Benefits vs API Key Only:**
-- ✓ Tokens expire automatically (1 hour)
-- ✓ Leaked token has limited lifetime
-- ✓ Can't be used outside CiviCRM
-- ✓ Full audit trail available
-
-→ **Learn more:** [JWT_AUTORESOLVE_SETUP.md](JWT_AUTORESOLVE_SETUP.md)
+### **9. HTTP Request node**
+The **CiviCRM API** credential also works in n8n's HTTP Request node (*Authentication → Predefined Credential Type → CiviCRM API*), with the same type, route and site key. With the `_authx` route, send a form-urlencoded body so the credential is not put in the URL.
 
 ---
 
 ## Compatibility
 
-- **n8n version:** 1.0.0 or higher  
-- **Node.js:** 18 or higher  
-- **CiviCRM:** API v4 compatible 
+- **n8n:** tested with 2.41; requires n8n 1.0 or higher
+- **Node.js:** 18 or higher
+- **CiviCRM:** APIv4 with the AuthX extension (tested with CiviCRM 6.4)
+
+Upgrading from 3.x? See the breaking changes in [CHANGELOG.md](CHANGELOG.md); credentials saved with 3.x keep working.
 
 ---
 
 ## Development
 
-Clone the repository and run:
-
-```bash
-npm install
-npm run dev
-```
-
-Build:
-
-```bash
-npm run build
-```
+See [DEVELOPMENT.md](DEVELOPMENT.md) for the Docker development stack, tests (unit, live integration and n8n end-to-end) and the release process.
 
 ---
 

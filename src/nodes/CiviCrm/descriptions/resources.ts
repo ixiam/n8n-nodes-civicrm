@@ -11,14 +11,16 @@ export const resourceProp: INodeProperties = {
 	type: 'options',
 	noDataExpression: true,
 	default: 'contact',
-	description: 'The entity to operate on. Choose "Custom API Call" to access any CiviCRM APIv4 entity not listed.',
+	description:
+		'The entity to operate on. "Any Entity" lists every entity and action the site offers; "Custom API Call" sends hand-written APIv4 calls.',
 	options: [
 		{ name: 'Activity', value: 'activity' },
+		{ name: 'Any Entity', value: 'anyEntity', description: 'Entities and actions discovered from the connected site' },
 		{ name: 'Contact', value: 'contact' },
+		{ name: 'Custom API Call', value: 'customApi' },
 		{ name: 'Group', value: 'group' },
 		{ name: 'Membership', value: 'membership' },
 		{ name: 'Relationship', value: 'relationship' },
-		{ name: 'Custom API Call', value: 'customApi' },
 	],
 };
 
@@ -39,14 +41,13 @@ export const operationProp: INodeProperties = {
 	type: 'options',
 	default: 'getMany',
 	noDataExpression: true,
-	description: 'The action to perform on the selected resource.',
 	displayOptions: { show: { resource: ['contact', 'membership', 'group', 'relationship', 'activity'] } },
 	options: [
-		{ name: 'Create', value: 'create', description: 'Create a new record' },
-		{ name: 'Delete', value: 'delete', description: 'Delete a record by ID' },
-		{ name: 'Get', value: 'get', description: 'Retrieve a single record by ID' },
-		{ name: 'Get Many', value: 'getMany', description: 'Retrieve multiple records with optional filtering' },
-		{ name: 'Update', value: 'update', description: 'Update a record by ID' },
+		{ name: 'Create', value: 'create', description: 'Create a new record', action: 'Create a record' },
+		{ name: 'Delete', value: 'delete', description: 'Delete a record by ID', action: 'Delete a record' },
+		{ name: 'Get', value: 'get', description: 'Retrieve a single record by ID', action: 'Get a record' },
+		{ name: 'Get Many', value: 'getMany', description: 'Retrieve multiple records with optional filtering', action: 'Get many records' },
+		{ name: 'Update', value: 'update', description: 'Update a record by ID', action: 'Update a record' },
 	],
 };
 
@@ -71,16 +72,15 @@ export const customApiOperationProp: INodeProperties = {
 	type: 'options',
 	default: 'raw',
 	noDataExpression: true,
-	description: 'The action to perform via the Custom API Call resource.',
 	displayOptions: { show: { resource: ['customApi'] } },
 	options: [
-		{ name: 'Raw API Call', value: 'raw', description: 'Hand-typed entity/action/params passthrough to any CiviCRM APIv4 endpoint (advanced/escape hatch)' },
-		{ name: 'List Fields', value: 'getFields', description: 'Call {Entity}/getFields and return field metadata for any CiviCRM entity' },
-		{ name: 'Dynamic Search', value: 'search', description: 'Run {Entity}/get with a configurable Select and Where for any CiviCRM entity' },
-		{ name: 'Get (Legacy)', value: 'get', description: 'Legacy value, resolves to Raw API Call' },
-		{ name: 'Get Many (Legacy)', value: 'getMany', description: 'Legacy value, resolves to Raw API Call' },
-		{ name: 'Create (Legacy)', value: 'create', description: 'Legacy value, resolves to Raw API Call' },
-		{ name: 'Update (Legacy)', value: 'update', description: 'Legacy value, resolves to Raw API Call' },
-		{ name: 'Delete (Legacy)', value: 'delete', description: 'Legacy value, resolves to Raw API Call' },
+		{ name: 'Create (Legacy)', value: 'create', description: 'Legacy value, resolves to Raw API Call', action: 'Send a raw api call legacy create' },
+		{ name: 'Delete (Legacy)', value: 'delete', description: 'Legacy value, resolves to Raw API Call', action: 'Send a raw api call legacy delete' },
+		{ name: 'Dynamic Search', value: 'search', description: 'Run {Entity}/get with a configurable Select and Where for any CiviCRM entity', action: 'Search any entity' },
+		{ name: 'Get (Legacy)', value: 'get', description: 'Legacy value, resolves to Raw API Call', action: 'Send a raw api call legacy get' },
+		{ name: 'Get Many (Legacy)', value: 'getMany', description: 'Legacy value, resolves to Raw API Call', action: 'Send a raw api call legacy get many' },
+		{ name: 'List Fields', value: 'getFields', description: 'Call {Entity}/getFields and return field metadata for any CiviCRM entity', action: 'List the fields of an entity' },
+		{ name: 'Raw API Call', value: 'raw', description: 'Hand-typed entity/action/params passthrough to any CiviCRM APIv4 endpoint (advanced/escape hatch)', action: 'Send a raw API call' },
+		{ name: 'Update (Legacy)', value: 'update', description: 'Legacy value, resolves to Raw API Call', action: 'Send a raw api call legacy update' },
 	],
 };

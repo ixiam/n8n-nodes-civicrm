@@ -1,7 +1,9 @@
+// Test-only helper (never shipped): n8n's ban on Node built-ins targets node code.
+// eslint-disable-next-line @n8n/community-nodes/no-restricted-imports
 import http from "http";
 
 export function startMockCiviServer(port = 5555) {
-  let lastRequestBody: any = null;
+  let lastRequestBody: Record<string, unknown> | string | null = null;
 
   const server = http.createServer((req, res) => {
     if (req.method === "POST") {
@@ -16,7 +18,7 @@ export function startMockCiviServer(port = 5555) {
         }
 
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ values: [{ id: 999, ...lastRequestBody }], is_error: 0 }));
+        res.end(JSON.stringify({ values: [{ id: 999, ...(typeof lastRequestBody === "object" ? lastRequestBody : {}) }], is_error: 0 }));
       });
     }
   });

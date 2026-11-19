@@ -1,60 +1,26 @@
-import type {
-  IExecuteFunctions,
-  IHttpRequestOptions,
-  INode,
-  JsonObject,
-} from 'n8n-workflow';
-import { NodeApiError, NodeOperationError } from 'n8n-workflow';
-import { isJwtAuthEnabled, getServerIssuedJwt } from './JwtAuth';
+import type { IDataObject, IExecuteFunctions, ILoadOptionsFunctions, INode } from 'n8n-workflow';
+import { NodeOperationError } from 'n8n-workflow';
 
-type JwtHeaderMode = 'both' | 'authorization' | 'xheader';
+import type { CiviAuthConfig } from './Auth';
+import {
+	bearer,
+	buildRequestParts,
+	credentialValue,
+	describeCredential,
+	flowLabel,
+	identityKey,
+	resolveAuthConfig,
+} from './Auth';
+import { civiApiError, isAuthRejection, isMaxRowsError } from './Errors';
+import { isReadOnlyPath, senderForContext, sendWithRetry, toHttpFailure } from './Http';
+import { forgetJwt, getSessionJwt, jwtSuspension, suspendJwt } from './JwtAuth';
 
-function getJwtHeaderMode(credentials: Record<string, unknown>): JwtHeaderMode {
-  const rawMode = String(credentials.jwtHeaderMode ?? 'xheader');
+type CiviContext = IExecuteFunctions | ILoadOptionsFunctions;
 
-  if (rawMode === 'authorization' || rawMode === 'xheader' || rawMode === 'both') {
-    return rawMode;
-  }
-
-  return 'xheader';
-}
-
-function applyJwtHeaders(
-  headers: Record<string, string>,
-  jwtToken: string,
-  headerMode: JwtHeaderMode,
-): void {
-  const bearer = `Bearer ${jwtToken}`;
-
-  if (headerMode === 'both' || headerMode === 'authorization') {
-    headers.Authorization = bearer;
-  }
-
-  if (headerMode === 'both' || headerMode === 'xheader') {
-    headers['X-Civi-Auth'] = bearer;
-  }
-}
-
-function getHttpErrorDetails(error: unknown): string {
-  const errorObj = error as {
-    message?: string;
-    response?: { status?: number; data?: unknown };
-  };
-
-  const status = errorObj?.response?.status;
-  const data = errorObj?.response?.data;
-  const message = errorObj?.message ?? 'Request rejected by CiviCRM';
-
-  if (typeof data === 'string' && data.trim()) {
-    return status ? `${message} | HTTP ${status} body: ${data}` : `${message} | body: ${data}`;
-  }
-
-  if (data && typeof data === 'object') {
-    const serialized = JSON.stringify(data);
-    return status ? `${message} | HTTP ${status} body: ${serialized}` : `${message} | body: ${serialized}`;
-  }
-
-  return status ? `${message} | HTTP ${status}` : message;
+export interface CiviApiResponse extends IDataObject {
+	values?: IDataObject[];
+	count?: number;
+	countFetched?: number;
 }
 
 /**
@@ -69,266 +35,223 @@ function getHttpErrorDetails(error: unknown): string {
  * so it is safe to call both in the node and in the transport.
  */
 export function normalizeBaseUrlOverride(
-  node: INode,
-  rawValue: unknown,
-  itemIndex?: number,
+	node: INode,
+	rawValue: unknown,
+	itemIndex?: number,
 ): string | undefined {
-  if (rawValue === undefined || rawValue === null) return undefined;
+	if (rawValue === undefined || rawValue === null) return undefined;
 
-  let value = String(rawValue).trim();
-  if (!value) return undefined;
+	let value = String(rawValue).trim();
+	if (!value) return undefined;
 
-  value = value.replace(/\/+$/, '');
+	value = value.replace(/\/+$/, '');
 
-  const schemeMatch = /^([a-z][a-z0-9+.-]*):\/\//i.exec(value);
-  if (schemeMatch) {
-    const scheme = schemeMatch[1].toLowerCase();
-    if (scheme !== 'http' && scheme !== 'https') {
-      throw new NodeOperationError(
-        node,
-        `Invalid Base URL Override "${value}": only http:// and https:// URLs are allowed (got "${scheme}://").`,
-        { itemIndex },
-      );
-    }
-  } else {
-    value = `https://${value}`;
-  }
+	const schemeMatch = /^([a-z][a-z0-9+.-]*):\/\//i.exec(value);
+	if (schemeMatch) {
+		const scheme = schemeMatch[1].toLowerCase();
+		if (scheme !== 'http' && scheme !== 'https') {
+			throw new NodeOperationError(
+				node,
+				`Invalid Base URL Override "${value}": only http:// and https:// URLs are allowed (got "${scheme}://").`,
+				{ itemIndex },
+			);
+		}
+	} else {
+		value = `https://${value}`;
+	}
 
-  let parsed: URL;
-  try {
-    parsed = new URL(value);
-  } catch {
-    throw new NodeOperationError(
-      node,
-      `Invalid Base URL Override "${String(rawValue).trim()}": not a valid URL. Expected the site root, e.g. https://example.org`,
-      { itemIndex },
-    );
-  }
+	let parsed: URL;
+	try {
+		parsed = new URL(value);
+	} catch {
+		throw new NodeOperationError(
+			node,
+			`Invalid Base URL Override "${String(rawValue).trim()}": not a valid URL. Expected the site root, e.g. https://example.org`,
+			{ itemIndex },
+		);
+	}
 
-  if ((parsed.protocol !== 'http:' && parsed.protocol !== 'https:') || !parsed.hostname) {
-    throw new NodeOperationError(
-      node,
-      `Invalid Base URL Override "${String(rawValue).trim()}": only http:// and https:// URLs with a host are allowed.`,
-      { itemIndex },
-    );
-  }
+	if ((parsed.protocol !== 'http:' && parsed.protocol !== 'https:') || !parsed.hostname) {
+		throw new NodeOperationError(
+			node,
+			`Invalid Base URL Override "${String(rawValue).trim()}": only http:// and https:// URLs with a host are allowed.`,
+			{ itemIndex },
+		);
+	}
 
-  return value;
+	return value;
 }
 
-export function buildCiviAuthHeaders(
-  credentials: Record<string, unknown>,
-  baseUrl: string,
-  jwtToken?: string,
-): Record<string, string> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/x-www-form-urlencoded',
-  };
+const NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
 
-  // Use JWT if available and enabled; otherwise always fall back to API key
-  if (jwtToken && isJwtAuthEnabled(credentials)) {
-    const headerMode = getJwtHeaderMode(credentials);
-    applyJwtHeaders(headers, jwtToken, headerMode);
-  } else {
-    // Always provide API key as fallback
-    headers['X-Civi-Auth'] = `Bearer ${credentials.apiToken as string}`;
-  }
+/** Entity and action names go into the URL path, so only plain identifiers are accepted. */
+export function assertApiName(node: INode, kind: 'entity' | 'action', value: string, itemIndex?: number): string {
+	const name = String(value ?? '').trim();
+	if (!NAME_PATTERN.test(name)) {
+		throw new NodeOperationError(
+			node,
+			`Invalid CiviCRM ${kind} name "${name}": only letters, digits and underscores are allowed.`,
+			{ itemIndex },
+		);
+	}
+	return name;
+}
 
-  return headers;
+const hintedContexts = new WeakSet<object>();
+
+function warn(ctx: CiviContext, message: string): void {
+	if ('addExecutionHints' in ctx && typeof ctx.addExecutionHints === 'function') {
+		ctx.addExecutionHints({ message, type: 'warning', location: 'outputPane' });
+	}
+}
+
+/** Warns once per node run that JWT sessions are suspended for this credential. */
+function warnSuspendedOnce(ctx: CiviContext, cfg: CiviAuthConfig, reason: string): void {
+	if (hintedContexts.has(ctx)) return;
+	hintedContexts.add(ctx);
+	warn(ctx, `JWT sessions are paused for this credential (${reason}). Using the ${describeCredential(cfg)} instead.`);
 }
 
 /**
- * Executes a CiviCRM API v4 call with authentication (JWT or API Key).
- * Falls back to API Key if JWT is unavailable, fails, or returns empty results.
+ * Executes one CiviCRM APIv4 REST call (POST {base}{path}) with the node's credential.
  *
- * `runtimeBearerToken` (optional) is a per-execution JWT that the caller
- * already holds for a specific real user (e.g. a CiviCRM Authx JWT minted by
- * Drupal for the logged-in contact, passed into the node via the "Runtime
- * Bearer Token" parameter/expression). When provided, it takes absolute
- * priority: it is sent as-is and none of the credential-based logic below
- * (JWT auto-resolve via `getServerIssuedJwt`/`resolveContactId`, or the
- * empty-response/error fallback to the credential's API key) runs at all.
- * See the early-return block right below for why.
- *
- * `baseUrlOverride` (optional) replaces the credential's Base URL for this
- * call (per-item "Base URL Override" parameter), so a single credential/API key
- * can target several CiviCRM instances. It is used for every request made by
- * this call, including the JWT paths (Contact/get auto-resolve,
- * AuthxCredential/create) and the API key fallback. The JWT caches in JwtAuth
- * are keyed by this effective base URL, so a token issued by one instance is
- * never sent to another. Empty/undefined -> credential Base URL, unchanged.
+ * - `runtimeBearerToken`: a JWT for a specific real user. Sent exactly as given, with no
+ *   fallback: an empty or denied answer is that user's correct permission outcome.
+ * - Credential JWT sessions: when enabled, a JWT is minted with the stored credential and
+ *   reused until it expires. If CiviCRM refuses the JWT at authentication, the call is
+ *   repeated once with the stored credential and JWTs pause for 15 minutes. Any other
+ *   error is reported as is, so writes are never sent twice.
+ * - `baseUrlOverride`: targets another site with the same credential; JWTs are cached per
+ *   site so a token from one instance is never sent to another.
  */
 export async function civicrmApiRequest(
-  this: IExecuteFunctions,
-  method: 'POST',
-  path: string,
-  body: Record<string, unknown>,
-  runtimeBearerToken?: string,
-  baseUrlOverride?: string,
-) {
-  const credentials = (await this.getCredentials('civiCrmApi')) as Record<string, unknown>;
-  const normalizedOverride = normalizeBaseUrlOverride(this.getNode(), baseUrlOverride);
-  const baseUrl = normalizedOverride ?? (credentials.baseUrl as string).replace(/\/$/, '');
-  const apiToken = credentials.apiToken as string;
+	this: CiviContext,
+	method: 'POST',
+	path: string,
+	body: Record<string, unknown>,
+	runtimeBearerToken?: string,
+	baseUrlOverride?: string,
+	itemIndex?: number,
+): Promise<CiviApiResponse> {
+	const credentials = (await this.getCredentials('civiCrmApi')) as Record<string, unknown>;
+	const cfg = resolveAuthConfig(credentials);
+	const override = normalizeBaseUrlOverride(this.getNode(), baseUrlOverride, itemIndex);
+	const baseUrl = override ?? cfg.baseUrl;
+	const url = `${baseUrl}${path}`;
+	const params = (body.params as Record<string, unknown> | undefined) ?? body;
+	const idempotent = isReadOnlyPath(path);
+	const send = senderForContext(this);
+	const node = this.getNode();
 
-  // Runtime bearer token path: used exactly as given, with no fallback.
-  //
-  // This exists for per-user permission enforcement (issue #25): the token
-  // here already belongs to a specific real CiviCRM contact (not the
-  // credential's own contact/API key owner), so an empty or denied response
-  // is a *correct* outcome - it means that real user lacks permission for
-  // the requested data - not a failure to silently "fix" by retrying with a
-  // more privileged identity. That is exactly the behavior the credential-based
-  // path below has (empty JWT response -> retry with the plaintext API key),
-  // and it is exactly what must NOT happen here, so this path never falls
-  // through into that logic.
-  //
-  // The token is sent with the same header(s) as the credential's JWT path
-  // (`jwtHeaderMode`, default `xheader` = X-Civi-Auth). A hardcoded
-  // `Authorization` header is not enough: many nginx + PHP-FPM setups do not
-  // pass it to PHP, so CiviCRM sees an unauthenticated request and rejects it
-  // ("SECURITY ALERT: Ajax requests can only be issued by javascript
-  // clients"). X-Civi-Auth always reaches CiviCRM.
-  if (runtimeBearerToken) {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    };
-    applyJwtHeaders(headers, runtimeBearerToken, getJwtHeaderMode(credentials));
-    const options: IHttpRequestOptions = {
-      method,
-      url: `${baseUrl}${path}`,
-      headers,
-      body: {
-        params: JSON.stringify(body.params ?? body),
-      },
-      json: true,
-    };
+	const call = async (authValue: string, flow: CiviAuthConfig['flow']) =>
+		(await sendWithRetry(send, { url, ...buildRequestParts(cfg, authValue, flow, params) }, { idempotent })) as CiviApiResponse;
 
-    try {
-      // Whatever CiviCRM returns (including an empty `values: []`) is
-      // returned to the caller untouched - no retry, no fallback.
-      return await this.helpers.httpRequest.call(this, options);
-    } catch (error: unknown) {
-      throw new NodeApiError(this.getNode(), error as JsonObject);
-    }
-  }
+	if (runtimeBearerToken) {
+		try {
+			return await call(bearer(runtimeBearerToken), cfg.tokenFlow);
+		} catch (error) {
+			throw civiApiError(node, error, { url, credentialLabel: `runtime bearer token via ${flowLabel(cfg.tokenFlow)}` }, itemIndex);
+		}
+	}
 
-  let jwtToken: string | undefined;
-  let useJwt = false;
+	const identity = identityKey(cfg, baseUrl);
+	const suspended = cfg.jwtEnabled ? jwtSuspension(identity) : undefined;
+	if (suspended) warnSuspendedOnce(this, cfg, suspended);
 
-  // Attempt to obtain JWT if enabled
-  if (isJwtAuthEnabled(credentials)) {
-    const ttl = Number(credentials.jwtExpiry ?? 3600);
+	if (cfg.jwtEnabled && !suspended) {
+		let token: string | undefined;
+		try {
+			token = await getSessionJwt(send, cfg, baseUrl, identity);
+		} catch (error) {
+			const reason = error instanceof Error ? error.message : String(error);
+			suspendJwt(identity, reason);
+			warn(this, `Could not start a JWT session (${reason}). Using the ${describeCredential(cfg)} for the next 15 minutes.`);
+		}
 
-    try {
-      // Auto-resolve contact ID is built-in to getServerIssuedJwt
-      jwtToken = await getServerIssuedJwt(this, baseUrl, apiToken, 0, ttl);
-      if (jwtToken) {
-        useJwt = true;
-      } else {
-        this.addExecutionHints({
-          message: 'JWT authentication could not be obtained (no token returned by CiviCRM). Falling back to API Key authentication.',
-          type: 'warning',
-          location: 'outputPane',
-        });
-      }
-    } catch (error) {
-      const errorMsg = getHttpErrorDetails(error);
-      this.addExecutionHints({
-        message: `JWT authentication failed (${errorMsg}). Falling back to API Key authentication.`,
-        type: 'warning',
-        location: 'outputPane',
-      });
-    }
-  }
+		if (token) {
+			try {
+				return await call(bearer(token), cfg.tokenFlow);
+			} catch (error) {
+				if (!isAuthRejection(error)) {
+					throw civiApiError(node, error, { url, credentialLabel: `JWT via ${flowLabel(cfg.tokenFlow)}` }, itemIndex);
+				}
+				const text = toHttpFailure(error).text || 'JWT rejected';
+				if (/not allowed/i.test(text)) {
+					suspendJwt(identity, text);
+					warn(this, `CiviCRM refused the JWT (${text}). Using the ${describeCredential(cfg)} for the next 15 minutes.`);
+				} else {
+					// Expired or revoked token: mint a fresh one next time.
+					forgetJwt(identity);
+				}
+			}
+		}
+	}
 
-  // Try with JWT first (if available)
-  if (useJwt && jwtToken) {
-    const headers = buildCiviAuthHeaders(credentials, baseUrl, jwtToken);
-    const options: IHttpRequestOptions = {
-      method,
-      url: `${baseUrl}${path}`,
-      headers,
-      body: {
-        params: JSON.stringify(body.params ?? body),
-      },
-      json: true,
-    };
-
-    try {
-      const response = await this.helpers.httpRequest.call(this, options);
-      
-      // Check if response has data. If JWT returned empty but we expected data, fallback to API key
-      const hasData = hasResponseData(response);
-      if (hasData) {
-        return response;
-      } else {
-        this.addExecutionHints({
-          message: 'The JWT-authenticated request returned no data (JWT may have limited permissions). Retrying with API Key authentication.',
-          type: 'warning',
-          location: 'outputPane',
-        });
-        // Fall through to API key attempt below
-      }
-    } catch (error: unknown) {
-      const errorMsg = getHttpErrorDetails(error);
-      this.addExecutionHints({
-        message: `The JWT-authenticated request failed (${errorMsg}). Retrying with API Key authentication.`,
-        type: 'warning',
-        location: 'outputPane',
-      });
-      // Fall through to API key attempt below
-    }
-  }
-
-  // Fallback to API Key
-  const apiKeyHeaders = buildCiviAuthHeaders(credentials, baseUrl, undefined);
-  const apiKeyOptions: IHttpRequestOptions = {
-    method,
-    url: `${baseUrl}${path}`,
-    headers: apiKeyHeaders,
-    body: {
-      params: JSON.stringify(body.params ?? body),
-    },
-    json: true,
-  };
-
-  try {
-    return await this.helpers.httpRequest.call(this, apiKeyOptions);
-  } catch (error: unknown) {
-    throw new NodeApiError(this.getNode(), error as JsonObject);
-  }
+	try {
+		return await call(credentialValue(cfg), cfg.flow);
+	} catch (error) {
+		throw civiApiError(node, error, { url, credentialLabel: describeCredential(cfg) }, itemIndex);
+	}
 }
 
 /**
- * Check if API response contains actual data.
- * Returns false if response is empty/no results, true if has data.
+ * Fetches every row of a `get`-style call in pages. Drops to pages of 100 when the
+ * site caps rows per call (apirestlog guard), and stops when a page comes back short.
  */
-function hasResponseData(response: any): boolean {
-  if (!response) return false;
-  
-  // Check for APIv4 response format: { values: [...], count: N }
-  if (response.values !== undefined) {
-    return Array.isArray(response.values) && response.values.length > 0;
-  }
-  
-  // Check for other formats
-  if (Array.isArray(response)) {
-    return response.length > 0;
-  }
-  
-  // If response exists and isn't an empty array, consider it has data
-  return Object.keys(response).length > 0;
+export async function fetchAllPages(
+	this: CiviContext,
+	path: string,
+	params: Record<string, unknown>,
+	options: { runtimeBearerToken?: string; baseUrlOverride?: string; itemIndex?: number; pageSize?: number } = {},
+): Promise<IDataObject[]> {
+	let pageSize = options.pageSize ?? 500;
+	let offset = 0;
+	const rows: IDataObject[] = [];
+
+	for (;;) {
+		let response: CiviApiResponse;
+		try {
+			response = await civicrmApiRequest.call(
+				this,
+				'POST',
+				path,
+				{ ...params, limit: pageSize, offset },
+				options.runtimeBearerToken,
+				options.baseUrlOverride,
+				options.itemIndex,
+			);
+		} catch (error) {
+			if (pageSize > 100 && isMaxRowsError(error)) {
+				pageSize = 100;
+				continue;
+			}
+			throw error;
+		}
+		const values = response?.values ?? [];
+		rows.push(...values);
+		if (values.length < pageSize) return rows;
+		offset += pageSize;
+	}
 }
 
 /**
- * Returns the standard body for API4 calls (flat params).
+ * Runs a call without a limit and, if the site silently capped the rows
+ * (count > countFetched), fetches the rest with offsets.
  */
-export function api4(
-  entity: string,
-  action: string,
-  params: Record<string, unknown> = {},
-) {
-  // return flat parameters, not nested
-  return params;
+export async function fetchUncapped(
+	this: CiviContext,
+	path: string,
+	params: Record<string, unknown>,
+): Promise<IDataObject[]> {
+	const first = await civicrmApiRequest.call(this, 'POST', path, params);
+	const rows = [...(first?.values ?? [])];
+	const total = Number(first?.count ?? rows.length);
+	const page = rows.length;
+	while (page > 0 && rows.length < total) {
+		const next = await civicrmApiRequest.call(this, 'POST', path, { ...params, limit: page, offset: rows.length });
+		const values = next?.values ?? [];
+		if (!values.length) break;
+		rows.push(...values);
+	}
+	return rows;
 }

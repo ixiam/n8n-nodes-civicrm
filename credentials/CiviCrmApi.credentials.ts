@@ -1,15 +1,17 @@
 import type {
+	IAuthenticate,
+	ICredentialTestRequest,
 	ICredentialType,
 	INodeProperties,
-	ICredentialTestRequest,
 } from 'n8n-workflow';
 
-export class CiviCrmApi implements ICredentialType {
+import { authenticateRequest } from '../src/nodes/transport/Auth';
 
+export class CiviCrmApi implements ICredentialType {
 	name = 'civiCrmApi';
 	displayName = 'CiviCRM API';
 	icon = 'file:civicrm.svg' as const;
-	documentationUrl = 'https://docs.civicrm.org/dev/en/latest/api/v4/usage/#auth';
+	documentationUrl = 'https://docs.civicrm.org/dev/en/latest/framework/authx/';
 
 	properties: INodeProperties[] = [
 		{
@@ -17,87 +19,129 @@ export class CiviCrmApi implements ICredentialType {
 			name: 'baseUrl',
 			type: 'string',
 			default: '',
-			placeholder: 'https://example.org/civicrm',
+			placeholder: 'https://crm.example.org',
 			required: true,
+			description:
+				'Root URL of the CiviCRM site, without "/civicrm" (the connector adds /civicrm/ajax/api4 itself)',
 		},
 		{
-			displayName: 'API Token',
+			displayName: 'Authentication Type',
+			name: 'authType',
+			type: 'options',
+			default: 'apiKey',
+			options: [
+				{
+					name: 'API Key',
+					value: 'apiKey',
+					description: 'API key of a CiviCRM contact (needs the "authenticate with api key" permission)',
+				},
+				{
+					name: 'Username and Password',
+					value: 'password',
+					description:
+						'CMS username and password (needs the "authenticate with password" permission and "pass" enabled in the AuthX settings)',
+				},
+			],
+		},
+		{
+			displayName: 'API Key',
 			name: 'apiToken',
 			type: 'string',
-			typeOptions: {
-				password: true,
-			},
+			typeOptions: { password: true },
 			default: '',
 			required: true,
+			displayOptions: { show: { authType: ['apiKey'] } },
 		},
 		{
-			displayName: 'Enable JWT Authentication',
-			name: 'enableJwtAuth',
-			type: 'boolean',
-			default: false,
-			description: 'Enable server-issued JWT authentication for improved security (time-bound tokens, auto-resolved contact ID). When disabled, uses API key authentication.',
+			displayName: 'Username',
+			name: 'username',
+			type: 'string',
+			default: '',
+			required: true,
+			displayOptions: { show: { authType: ['password'] } },
 		},
 		{
-			displayName: 'JWT Header Mode',
-			name: 'jwtHeaderMode',
+			displayName: 'Password',
+			name: 'password',
+			type: 'string',
+			typeOptions: { password: true },
+			default: '',
+			required: true,
+			displayOptions: { show: { authType: ['password'] } },
+		},
+		{
+			displayName: 'Send Credentials Via',
+			name: 'authFlow',
 			type: 'options',
 			default: 'xheader',
-			displayOptions: {
-				show: {
-					enableJwtAuth: [true],
-				},
-			},
 			options: [
 				{
 					name: 'X-Civi-Auth Header (Recommended)',
 					value: 'xheader',
+					description: 'Works behind proxies that strip the Authorization header',
 				},
 				{
 					name: 'Authorization Header',
-					value: 'authorization',
+					value: 'header',
+					description: 'Standard HTTP header; CiviCRM disables this route by default (authx_header_cred)',
 				},
 				{
-					name: 'Both Headers',
-					value: 'both',
+					name: '_authx Request Parameter',
+					value: 'param',
+					description: 'Sent in the POST body, for proxies that drop custom headers',
 				},
 			],
-			description: 'Where to send the JWT token.',
+			description:
+				'How the credential is sent to CiviCRM. The chosen route must accept this credential type in the AuthX settings.',
+		},
+		{
+			displayName: 'Site Key',
+			name: 'siteKey',
+			type: 'string',
+			typeOptions: { password: true },
+			default: '',
+			description:
+				'Optional. Sent as X-Civi-Key for sites whose AuthX guard relies on the site key (CIVICRM_SITE_KEY).',
+		},
+		{
+			displayName: 'Use Short-Lived JWT',
+			name: 'enableJwtAuth',
+			type: 'boolean',
+			default: false,
+			description:
+				'Whether to exchange the credential for a short-lived JWT (AuthxCredential.create) and send that instead. Needs the "generate any authx credential" permission and "jwt" enabled for the chosen route.',
 		},
 		{
 			displayName: 'JWT Expiry (Seconds)',
 			name: 'jwtExpiry',
 			type: 'number',
 			default: 3600,
-			typeOptions: {
-				minValue: 60,
-				maxValue: 86400,
-			},
-			displayOptions: {
-				show: {
-					enableJwtAuth: [true],
-				},
-			},
-			description: 'Lifetime of the server-issued JWT, in seconds, before it must be renewed. Default is 3600 (1 hour).',
+			typeOptions: { minValue: 60, maxValue: 86400 },
+			displayOptions: { show: { enableJwtAuth: [true] } },
+			description: 'Lifetime of each JWT before a new one is requested',
+		},
+		{
+			// Kept so credentials saved before 4.0 keep sending JWTs in the header they chose.
+			displayName: 'JWT Header Mode (Legacy)',
+			name: 'jwtHeaderMode',
+			type: 'hidden',
+			default: '',
 		},
 	];
 
-	// n8n's CredentialsTester always prefers a `test` defined directly here over the
-	// CiviCrm node's `testedBy: 'testCiviCrmApiConnection'` (see CiviCrm.node.ts), so
-	// that JWT-aware test never actually runs while this declarative test exists.
-	// It's kept as a plain API-key connectivity check so "Test credentials" always
-	// works reliably; the node's execution path (addExecutionHints) is what surfaces
-	// JWT-specific failures instead.
+	// Applies the chosen credential type, route and site key (used by the test below).
+	authenticate: IAuthenticate = async (credentials, requestOptions) =>
+		await authenticateRequest(credentials, requestOptions);
+
+	// Signs in exactly as the node will and asks CiviCRM who the credential belongs to.
 	test: ICredentialTestRequest = {
 		request: {
 			baseURL: '={{$credentials.baseUrl}}',
 			url: '/civicrm/ajax/api4/Contact/get',
 			method: 'POST',
-			headers: {
-				'Content-Type': 'application/x-www-form-urlencoded',
-				'X-Civi-Auth': '={{ "Bearer " + $credentials.apiToken }}',
-			},
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
 			body: {
-				params: JSON.stringify({ select: ['id'], limit: 1 }),
+				params: JSON.stringify({ select: ['id'], where: [['id', '=', 'user_contact_id']], limit: 1 }),
 			},
 		},
 	};

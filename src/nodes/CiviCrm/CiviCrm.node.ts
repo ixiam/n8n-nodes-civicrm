@@ -1,20 +1,29 @@
 import type {
 	IExecuteFunctions,
-	ILoadOptionsFunctions,
 	INodeExecutionData,
+	INodePropertyOptions,
 	INodeType,
 	INodeTypeDescription,
 	IDataObject,
 } from 'n8n-workflow';
-import { NodeConnectionTypes } from 'n8n-workflow';
+import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 
 import {
+	assertApiName,
 	civicrmApiRequest,
-	buildCiviAuthHeaders,
+	fetchAllPages,
 	normalizeBaseUrlOverride,
 } from '../transport/GenericFunctions';
 import { resourceProp, operationProp, customApiOperationProp } from './descriptions/resources';
 import { genericFields, upsertFields } from './descriptions/generic';
+import { anyEntityOperationProp, anyEntityProperties } from './anyEntity/description';
+import { executeAnyEntity } from './anyEntity/execute';
+import {
+	getAnyEntities,
+	getAnyEntityActions,
+	getAnyEntityFields,
+	getAnyEntityMappingColumns,
+} from './anyEntity/methods';
 
 /* ============================================================================
    RESOURCES
@@ -26,11 +35,18 @@ type Resource =
 	| 'group'
 	| 'relationship'
 	| 'activity'
-	| 'customApi';
+	| 'customApi'
+	| 'anyEntity';
 
 type Operation = 'get' | 'getMany' | 'create' | 'update' | 'delete';
 
-const ENTITY_MAP: Record<Exclude<Resource, 'customApi'>, string> = {
+// CiviCRM's default location types; "Mobile" is a phone type, not a location type.
+const LOCATION_TYPE_OPTIONS: INodePropertyOptions[] = ['Home', 'Work', 'Main', 'Billing', 'Other'].map((name) => ({
+	name,
+	value: name,
+}));
+
+const ENTITY_MAP: Record<Exclude<Resource, 'customApi' | 'anyEntity'>, string> = {
 	contact: 'Contact',
 	membership: 'Membership',
 	group: 'Group',
@@ -104,422 +120,14 @@ export class CiviCrm implements INodeType {
 		icon: 'file:civicrm.svg',
 		group: ['transform'],
 		version: 1,
-		description: 'Interact with CiviCRM API v4 to manage contacts, memberships, groups, and more.',
+		description: 'Interact with CiviCRM API v4: contacts, memberships, groups and any other entity on the site',
 		defaults: { name: 'CiviCRM' },
-		subtitle: '={{{"get":"Get","getMany":"Get Many","create":"Create","update":"Update","delete":"Delete","raw":"Raw API Call","getFields":"List Fields","search":"Dynamic Search"}[$parameter["operation"]] + ": " + {"contact":"Contact","membership":"Membership","group":"Group","relationship":"Relationship","activity":"Activity","customApi":"Custom API Call"}[$parameter["resource"]]}}',
+		subtitle:
+			'={{$parameter["resource"] === "anyEntity" ? (($parameter["operation"] === "other" ? $parameter["anyAction"] : {"get":"Get Many","create":"Create","update":"Update","save":"Create or Update","delete":"Delete"}[$parameter["operation"]]) + ": " + $parameter["anyEntity"]) : ({"get":"Get","getMany":"Get Many","create":"Create","update":"Update","delete":"Delete","raw":"Raw API Call","getFields":"List Fields","search":"Dynamic Search"}[$parameter["operation"]] + ": " + {"contact":"Contact","membership":"Membership","group":"Group","relationship":"Relationship","activity":"Activity","customApi":"Custom API Call"}[$parameter["resource"]])}}',
 		inputs: [NodeConnectionTypes.Main],
 		outputs: [NodeConnectionTypes.Main],
 
-		// @ts-ignore
 		usableAsTool: true,
-		// @ts-ignore
-		actions: [
-			{
-				displayName: 'Get Contact',
-				name: 'getContact',
-				action: 'Get a contact',
-				description: 'Retrieve a contact from CiviCRM by ID or email.',
-				displayOptions: { show: { resource: ['contact'], operation: ['get'] } },
-				properties: [
-					{
-						displayName: 'ID',
-						name: 'id',
-						type: 'number',
-						default: 0,
-						description: 'The internal CiviCRM ID of the contact to retrieve.',
-					},
-				],
-			},
-			{
-				displayName: 'Get Many Contacts',
-				name: 'getManyContacts',
-				action: 'Get many contacts',
-				description: 'Retrieve multiple contacts from CiviCRM with filtering.',
-				displayOptions: { show: { resource: ['contact'], operation: ['getMany'] } },
-				properties: [...genericFields],
-			},
-			{
-				displayName: 'Create Contact',
-				name: 'createContact',
-				action: 'Create a contact',
-				description: 'Create a new contact in CiviCRM.',
-				displayOptions: { show: { resource: ['contact'], operation: ['create'] } },
-				properties: [...upsertFields],
-			},
-			{
-				displayName: 'Update Contact',
-				name: 'updateContact',
-				action: 'Update a contact',
-				description: 'Update an existing contact in CiviCRM.',
-				displayOptions: { show: { resource: ['contact'], operation: ['update'] } },
-				properties: [
-					{
-						displayName: 'ID',
-						name: 'id',
-						type: 'number',
-						default: 0,
-						description: 'The ID of the contact to update.',
-					},
-					...upsertFields,
-				],
-			},
-			{
-				displayName: 'Delete Contact',
-				name: 'deleteContact',
-				action: 'Delete a contact',
-				description: 'Delete a contact from CiviCRM.',
-				displayOptions: { show: { resource: ['contact'], operation: ['delete'] } },
-				properties: [
-					{
-						displayName: 'ID',
-						name: 'id',
-						type: 'number',
-						default: 0,
-						description: 'The ID of the contact to delete.',
-					},
-				],
-			},
-
-			// ======================================================================
-			// MEMBERSHIP
-			// ======================================================================
-			{
-				displayName: 'Get Membership',
-				name: 'getMembership',
-				action: 'Get a membership',
-				description: 'Retrieve a membership by ID.',
-				displayOptions: { show: { resource: ['membership'], operation: ['get'] } },
-				properties: [
-					{
-						displayName: 'ID',
-						name: 'id',
-						type: 'number',
-						default: 0,
-						description: 'The internal CiviCRM ID of the membership.',
-					},
-				],
-			},
-			{
-				displayName: 'Get Many Memberships',
-				name: 'getManyMemberships',
-				action: 'Get many memberships',
-				description: 'Retrieve multiple memberships.',
-				displayOptions: { show: { resource: ['membership'], operation: ['getMany'] } },
-				properties: [...genericFields],
-			},
-			{
-				displayName: 'Create Membership',
-				name: 'createMembership',
-				action: 'Create a membership',
-				description: 'Create a new membership.',
-				displayOptions: { show: { resource: ['membership'], operation: ['create'] } },
-				properties: [...upsertFields],
-			},
-			{
-				displayName: 'Update Membership',
-				name: 'updateMembership',
-				action: 'Update a membership',
-				description: 'Update an existing membership.',
-				displayOptions: { show: { resource: ['membership'], operation: ['update'] } },
-				properties: [
-					{
-						displayName: 'ID',
-						name: 'id',
-						type: 'number',
-						default: 0,
-						description: 'The ID of the membership to update.',
-					},
-					...upsertFields,
-				],
-			},
-			{
-				displayName: 'Delete Membership',
-				name: 'deleteMembership',
-				action: 'Delete a membership',
-				description: 'Delete a membership.',
-				displayOptions: { show: { resource: ['membership'], operation: ['delete'] } },
-				properties: [
-					{
-						displayName: 'ID',
-						name: 'id',
-						type: 'number',
-						default: 0,
-						description: 'The ID of the membership to delete.',
-					},
-				],
-			},
-
-			// ======================================================================
-			// GROUP
-			// ======================================================================
-			{
-				displayName: 'Get Group',
-				name: 'getGroup',
-				action: 'Get a group',
-				description: 'Retrieve a group by ID.',
-				displayOptions: { show: { resource: ['group'], operation: ['get'] } },
-				properties: [
-					{
-						displayName: 'ID',
-						name: 'id',
-						type: 'number',
-						default: 0,
-						description: 'The internal CiviCRM ID of the group.',
-					},
-				],
-			},
-			{
-				displayName: 'Get Many Groups',
-				name: 'getManyGroups',
-				action: 'Get many groups',
-				description: 'Retrieve multiple groups.',
-				displayOptions: { show: { resource: ['group'], operation: ['getMany'] } },
-				properties: [...genericFields],
-			},
-			{
-				displayName: 'Create Group',
-				name: 'createGroup',
-				action: 'Create a group',
-				description: 'Create a new group.',
-				displayOptions: { show: { resource: ['group'], operation: ['create'] } },
-				properties: [...upsertFields],
-			},
-			{
-				displayName: 'Update Group',
-				name: 'updateGroup',
-				action: 'Update a group',
-				description: 'Update an existing group.',
-				displayOptions: { show: { resource: ['group'], operation: ['update'] } },
-				properties: [
-					{
-						displayName: 'ID',
-						name: 'id',
-						type: 'number',
-						default: 0,
-						description: 'The ID of the group to update.',
-					},
-					...upsertFields,
-				],
-			},
-			{
-				displayName: 'Delete Group',
-				name: 'deleteGroup',
-				action: 'Delete a group',
-				description: 'Delete a group.',
-				displayOptions: { show: { resource: ['group'], operation: ['delete'] } },
-				properties: [
-					{
-						displayName: 'ID',
-						name: 'id',
-						type: 'number',
-						default: 0,
-						description: 'The ID of the group to delete.',
-					},
-				],
-			},
-
-			// ======================================================================
-			// RELATIONSHIP
-			// ======================================================================
-			{
-				displayName: 'Get Relationship',
-				name: 'getRelationship',
-				action: 'Get a relationship',
-				description: 'Retrieve a relationship by ID.',
-				displayOptions: { show: { resource: ['relationship'], operation: ['get'] } },
-				properties: [
-					{
-						displayName: 'ID',
-						name: 'id',
-						type: 'number',
-						default: 0,
-						description: 'The internal CiviCRM ID of the relationship.',
-					},
-				],
-			},
-			{
-				displayName: 'Get Many Relationships',
-				name: 'getManyRelationships',
-				action: 'Get many relationships',
-				description: 'Retrieve multiple relationships.',
-				displayOptions: { show: { resource: ['relationship'], operation: ['getMany'] } },
-				properties: [...genericFields],
-			},
-			{
-				displayName: 'Create Relationship',
-				name: 'createRelationship',
-				action: 'Create a relationship',
-				description: 'Create a new relationship.',
-				displayOptions: { show: { resource: ['relationship'], operation: ['create'] } },
-				properties: [...upsertFields],
-			},
-			{
-				displayName: 'Update Relationship',
-				name: 'updateRelationship',
-				action: 'Update a relationship',
-				description: 'Update an existing relationship.',
-				displayOptions: { show: { resource: ['relationship'], operation: ['update'] } },
-				properties: [
-					{
-						displayName: 'ID',
-						name: 'id',
-						type: 'number',
-						default: 0,
-						description: 'The ID of the relationship to update.',
-					},
-					...upsertFields,
-				],
-			},
-			{
-				displayName: 'Delete Relationship',
-				name: 'deleteRelationship',
-				action: 'Delete a relationship',
-				description: 'Delete a relationship.',
-				displayOptions: { show: { resource: ['relationship'], operation: ['delete'] } },
-				properties: [
-					{
-						displayName: 'ID',
-						name: 'id',
-						type: 'number',
-						default: 0,
-						description: 'The ID of the relationship to delete.',
-					},
-				],
-			},
-
-			// ======================================================================
-			// ACTIVITY
-			// ======================================================================
-			{
-				displayName: 'Get Activity',
-				name: 'getActivity',
-				action: 'Get an activity',
-				description: 'Retrieve an activity by ID.',
-				displayOptions: { show: { resource: ['activity'], operation: ['get'] } },
-				properties: [
-					{
-						displayName: 'ID',
-						name: 'id',
-						type: 'number',
-						default: 0,
-						description: 'The internal CiviCRM ID of the activity.',
-					},
-				],
-			},
-			{
-				displayName: 'Get Many Activities',
-				name: 'getManyActivities',
-				action: 'Get many activities',
-				description: 'Retrieve multiple activities.',
-				displayOptions: { show: { resource: ['activity'], operation: ['getMany'] } },
-				properties: [...genericFields],
-			},
-			{
-				displayName: 'Create Activity',
-				name: 'createActivity',
-				action: 'Create an activity',
-				description: 'Create a new activity.',
-				displayOptions: { show: { resource: ['activity'], operation: ['create'] } },
-				properties: [...upsertFields],
-			},
-			{
-				displayName: 'Update Activity',
-				name: 'updateActivity',
-				action: 'Update an activity',
-				description: 'Update an existing activity.',
-				displayOptions: { show: { resource: ['activity'], operation: ['update'] } },
-				properties: [
-					{
-						displayName: 'ID',
-						name: 'id',
-						type: 'number',
-						default: 0,
-						description: 'The ID of the activity to update.',
-					},
-					...upsertFields,
-				],
-			},
-			{
-				displayName: 'Delete Activity',
-				name: 'deleteActivity',
-				action: 'Delete an activity',
-				description: 'Delete an activity.',
-				displayOptions: { show: { resource: ['activity'], operation: ['delete'] } },
-				properties: [
-					{
-						displayName: 'ID',
-						name: 'id',
-						type: 'number',
-						default: 0,
-						description: 'The ID of the activity to delete.',
-					},
-				],
-			},
-
-			// ======================================================================
-			// CUSTOM API — LIST FIELDS / DYNAMIC SEARCH
-			// ======================================================================
-			{
-				displayName: 'List Fields (Any Entity)',
-				name: 'customApiGetFields',
-				action: 'List fields for any CiviCRM entity',
-				description:
-					'Call {Entity}/getFields on any CiviCRM APIv4 entity (Contact, Contribution, Event, Case, custom entities, etc.) and return field metadata (name, type, required, options...) as node output. Run this before a Dynamic Search or Custom API Call for an entity/field you have not verified yet on this installation.',
-				displayOptions: { show: { resource: ['customApi'], operation: ['getFields'] } },
-				properties: [
-					{
-						displayName: 'Action Context',
-						name: 'getFieldsAction',
-						type: 'string',
-						default: 'get',
-						description:
-							'CiviCRM action context passed to getFields (e.g. get, create, update). Affects which fields are reported as required/readonly for that context.',
-					},
-				],
-			},
-			{
-				displayName: 'Dynamic Search (Any Entity)',
-				name: 'customApiSearch',
-				action: 'Run a dynamic search on any CiviCRM entity',
-				description:
-					'Run {Entity}/get with a configurable Select and Where for any CiviCRM APIv4 entity, not limited to Contact/Membership/Group/Relationship/Activity. Verify field names first with List Fields (Any Entity).',
-				displayOptions: { show: { resource: ['customApi'], operation: ['search'] } },
-				properties: [
-					{
-						displayName: 'Select (JSON)',
-						name: 'searchSelectJson',
-						type: 'string',
-						default: '["id"]',
-						placeholder: '["id","display_name","custom_12"]',
-						description: 'JSON array of field names to return, verified beforehand via getFields.',
-					},
-					{
-						displayName: 'Where (JSON)',
-						name: 'searchWhereJson',
-						type: 'string',
-						default: '',
-						placeholder: '[["city","=","Bilbao"]]',
-						description:
-							"JSON array of [field, operator, value] triples, same pattern as Get Many's Where (JSON).",
-					},
-					{
-						displayName: 'Return All',
-						name: 'searchReturnAll',
-						type: 'boolean',
-						default: false,
-						description: 'Whether to return all results or only up to a given limit.',
-					},
-					{
-						displayName: 'Limit',
-						name: 'searchLimit',
-						type: 'number',
-						typeOptions: { minValue: 1, maxValue: 1000 },
-						default: 100,
-						description: 'Max number of results to return. Defaults to 100.',
-					},
-				],
-			},
-		],
 		credentials: [{ name: 'civiCrmApi', required: true }],
 
 		properties: [
@@ -529,6 +137,7 @@ export class CiviCrm implements INodeType {
 			resourceProp,
 			operationProp,
 			customApiOperationProp,
+			anyEntityOperationProp,
 
 			//
 			// CONTACT TYPE
@@ -538,7 +147,7 @@ export class CiviCrm implements INodeType {
 				name: 'contactType',
 				type: 'options',
 				default: 'Individual',
-				description: 'Type of contact to create.',
+				description: 'Type of contact to create',
 				options: [
 					{ name: 'Individual', value: 'Individual' },
 					{ name: 'Organization', value: 'Organization' },
@@ -569,12 +178,8 @@ export class CiviCrm implements INodeType {
 				name: 'emailLocation',
 				type: 'options',
 				default: 'Work',
-				description: 'Location type for the email address.',
-				options: [
-					{ name: 'Home', value: 'Home' },
-					{ name: 'Work', value: 'Work' },
-					{ name: 'Other', value: 'Other' },
-				],
+				description: 'Location type for the email address',
+				options: LOCATION_TYPE_OPTIONS,
 				displayOptions: { show: { resource: ['contact'], operation: ['create', 'update'] } },
 			},
 			{
@@ -582,7 +187,7 @@ export class CiviCrm implements INodeType {
 				name: 'isPrimaryEmail',
 				type: 'boolean',
 				default: true,
-				description: 'Whether this email should be the primary email for the contact.',
+				description: 'Whether this email should be the primary email for the contact',
 				displayOptions: { show: { resource: ['contact'], operation: ['create', 'update'] } },
 			},
 			{
@@ -590,13 +195,8 @@ export class CiviCrm implements INodeType {
 				name: 'phoneLocation',
 				type: 'options',
 				default: 'Work',
-				description: 'Location type for the phone number.',
-				options: [
-					{ name: 'Home', value: 'Home' },
-					{ name: 'Work', value: 'Work' },
-					{ name: 'Mobile', value: 'Mobile' },
-					{ name: 'Other', value: 'Other' },
-				],
+				description: 'Location type for the phone number',
+				options: LOCATION_TYPE_OPTIONS,
 				displayOptions: { show: { resource: ['contact'], operation: ['create', 'update'] } },
 			},
 			{
@@ -604,7 +204,7 @@ export class CiviCrm implements INodeType {
 				name: 'isPrimaryPhone',
 				type: 'boolean',
 				default: true,
-				description: 'Whether this phone should be the primary phone for the contact.',
+				description: 'Whether this phone should be the primary phone for the contact',
 				displayOptions: { show: { resource: ['contact'], operation: ['create', 'update'] } },
 			},
 			{
@@ -612,13 +212,8 @@ export class CiviCrm implements INodeType {
 				name: 'addressLocation',
 				type: 'options',
 				default: 'Home',
-				description: 'Location type for the address.',
-				options: [
-					{ name: 'Home', value: 'Home' },
-					{ name: 'Work', value: 'Work' },
-					{ name: 'Billing', value: 'Billing' },
-					{ name: 'Other', value: 'Other' },
-				],
+				description: 'Location type for the address',
+				options: LOCATION_TYPE_OPTIONS,
 				displayOptions: { show: { resource: ['contact'], operation: ['create', 'update'] } },
 			},
 			{
@@ -626,7 +221,7 @@ export class CiviCrm implements INodeType {
 				name: 'isPrimaryAddress',
 				type: 'boolean',
 				default: true,
-				description: 'Whether this address should be the primary address for the contact.',
+				description: 'Whether this address should be the primary address for the contact',
 				displayOptions: { show: { resource: ['contact'], operation: ['create', 'update'] } },
 			},
 
@@ -639,7 +234,7 @@ export class CiviCrm implements INodeType {
 				type: 'number',
 				default: 0,
 				required: true,
-				description: 'The internal CiviCRM ID of the entity.',
+				description: 'The internal CiviCRM ID of the entity',
 				displayOptions: {
 					show: {
 						operation: ['get', 'update', 'delete'],
@@ -657,8 +252,7 @@ export class CiviCrm implements INodeType {
 				type: 'string',
 				default: 'Contact',
 				required: true,
-				description:
-					'CiviCRM API4 entity, for example Contact, Membership, Group, Activity, CustomValue, etc.',
+				description: 'CiviCRM API4 entity, for example Contact, Membership, Group, Activity, CustomValue, etc',
 				displayOptions: { show: { resource: ['customApi'] } },
 			},
 			{
@@ -667,8 +261,7 @@ export class CiviCrm implements INodeType {
 				type: 'string',
 				default: 'get',
 				required: true,
-				description:
-					'CiviCRM API4 action, for example get, getFields, create, update, delete, getOne, etc.',
+				description: 'CiviCRM API4 action, for example get, getFields, create, update, delete, getOne, etc',
 				// Also shown for the legacy operation values a customApi node saved
 				// before `customApiOperationProp` existed may still carry (see that
 				// prop's comments) - execute() treats all of them as the raw path.
@@ -718,8 +311,8 @@ export class CiviCrm implements INodeType {
 				name: 'searchSelectJson',
 				type: 'string',
 				default: '["id"]',
-				placeholder: '["id","display_name","custom_12"]',
-				description: 'JSON array of field names to return, verified beforehand via getFields.',
+				placeholder: '["ID","display_name","custom_12"]',
+				description: 'JSON array of field names to return, verified beforehand via getFields',
 				displayOptions: { show: { resource: ['customApi'], operation: ['search'] } },
 			},
 			{
@@ -728,7 +321,7 @@ export class CiviCrm implements INodeType {
 				type: 'string',
 				default: '',
 				placeholder: '[["city","=","Bilbao"]]',
-				description: "JSON array of [field, operator, value] triples, same pattern as Get Many's Where (JSON).",
+				description: 'JSON array of [field, operator, value] triples, same pattern as Get Many\'s Where (JSON)',
 				displayOptions: { show: { resource: ['customApi'], operation: ['search'] } },
 			},
 			{
@@ -736,7 +329,7 @@ export class CiviCrm implements INodeType {
 				name: 'searchReturnAll',
 				type: 'boolean',
 				default: false,
-				description: 'Whether to return all results or only up to a given limit.',
+				description: 'Whether to return all results or only up to a given limit',
 				displayOptions: { show: { resource: ['customApi'], operation: ['search'] } },
 			},
 			{
@@ -762,19 +355,17 @@ export class CiviCrm implements INodeType {
 				typeOptions: { password: true },
 				default: '',
 				description:
-					'A JWT already issued for a specific real user (e.g. a CiviCRM Authx JWT minted by ' +
+					'A JWT already issued for a specific real user (e.g. a CiviCRM AuthX JWT minted by ' +
 					'Drupal for the logged-in contact), usually set by expression such as ' +
-					'={{ $json.user_jwt }}. If set, it is used exactly as given as the ' +
-					'"Authorization: Bearer" header for this call, bypassing this node\'s ' +
-					"credential-based JWT auto-resolve and API key entirely. If the CiviCRM response " +
-					'is empty or an error with this token, it is returned/thrown as-is - the node does ' +
-					'NOT retry with the credential\'s API key, because an empty result is what a correct ' +
-					"permission check looks like when this user lacks access, not a failure to compensate " +
-					'for. Leave empty to use the credential (JWT auto-resolve or API key) as before.',
+					'={{ $json.user_jwt }}. If set, it is sent exactly as given, on the credential\'s ' +
+					'"Send Credentials Via" route, instead of the credential itself. Empty or denied answers ' +
+					'are returned as-is and never retried with the credential: they are this user\'s correct ' +
+					'permission outcome. Leave empty to use the credential.',
 				displayOptions: {
 					show: {
 						operation: ['get', 'getMany', 'getFields', 'search', 'raw', 'create', 'update', 'delete'],
 					},
+					hide: { resource: ['anyEntity'] },
 				},
 			},
 
@@ -793,7 +384,14 @@ export class CiviCrm implements INodeType {
 					'Useful for many instances sharing the same API key. Can be set by expression, e.g. ' +
 					'={{ $json.instance_url }}. If no scheme is given, https:// is assumed; only http(s) is allowed. ' +
 					"Leave empty to use the credential's Base URL.",
+				// Any Entity discovers with the credential's site, so it always runs there too.
+				displayOptions: { hide: { resource: ['anyEntity'] } },
 			},
+
+			//
+			// ANY ENTITY (discovered at runtime)
+			//
+			...anyEntityProperties,
 
 			//
 			// DYNAMIC FIELDS
@@ -804,33 +402,12 @@ export class CiviCrm implements INodeType {
 	};
 
 	/* ============================================================================
-	   LOAD OPTIONS (required by n8n verification)
+	   METHODS: Any Entity discovery
 	============================================================================ */
 
 	methods = {
-		loadOptions: {
-			async loadOptionValues(this: ILoadOptionsFunctions) {
-				const credentials = (await this.getCredentials('civiCrmApi')) as Record<string, unknown>;
-				const baseUrl = (credentials.baseUrl as string).replace(/\/$/, '');
-
-				const headers = buildCiviAuthHeaders(credentials, baseUrl);
-
-				const res = await this.helpers.httpRequest.call(this, {
-					method: 'POST',
-					url: `${baseUrl}/civicrm/ajax/api4/OptionValue/get`,
-					headers,
-					body: { params: JSON.stringify({ limit: 50, select: ['id', 'label'] }) },
-					json: true,
-				});
-
-				const values = (res?.values || []) as Array<{ id: number; label: string }>;
-
-				return values.map((v) => ({
-					name: v.label,
-					value: v.id,
-				}));
-			},
-		},
+		loadOptions: { getAnyEntities, getAnyEntityActions, getAnyEntityFields },
+		resourceMapping: { getAnyEntityMappingColumns },
 	};
 
 	/* ============================================================================
@@ -842,12 +419,26 @@ export class CiviCrm implements INodeType {
 		const out: INodeExecutionData[] = [];
 
 		const resource = this.getNodeParameter('resource', 0) as Resource;
-		const operation = this.getNodeParameter('operation', 0) as Operation;
+		const operation = this.getNodeParameter('operation', 0, '') as Operation;
 
-		const entity = resource !== 'customApi' ? ENTITY_MAP[resource] : '';
+		// n8n adds a "Custom API Call" operation for credentials with an authenticate hook; it means the HTTP Request node.
+		if ((operation as string) === '__CUSTOM_API_CALL__') {
+			throw new NodeOperationError(
+				this.getNode(),
+				'"Custom API Call" is handled by n8n\'s HTTP Request node: add one and choose Authentication > Predefined Credential Type > CiviCRM API. Or use this node\'s "Custom API Call" or "Any Entity" resource.',
+			);
+		}
+
+		const entity = resource === 'customApi' || resource === 'anyEntity' ? '' : ENTITY_MAP[resource];
 
 		for (let i = 0; i < items.length; i++) {
 			try {
+			// Any Entity: entity/action discovered with the credential, executed with it too.
+			if (resource === 'anyEntity') {
+				out.push(...(await executeAnyEntity.call(this, i, items[i])));
+				continue;
+			}
+
 			// Per-execution JWT for a specific real user (issue #25 - permissions
 			// by real user via Authx), read once per item so it can come from an
 			// expression like ={{ $json.user_jwt }}. Threaded into every
@@ -877,7 +468,12 @@ export class CiviCrm implements INodeType {
 			// Dynamic Search operations for any API4 entity (not just the 5 fixed
 			// resources above).
 			if (resource === 'customApi') {
-				const customEntity = this.getNodeParameter('customEntity', i) as string;
+				const customEntity = assertApiName(
+					this.getNode(),
+					'entity',
+					this.getNodeParameter('customEntity', i) as string,
+					i,
+				);
 				// Any value other than 'getFields'/'search' (including the new
 				// 'raw' default and every legacy value the shared operationProp
 				// used to allow here) resolves to the original raw passthrough.
@@ -923,45 +519,29 @@ export class CiviCrm implements INodeType {
 					if (selectJson) {
 						try {
 							select = JSON.parse(selectJson);
-						} catch (error) {
-							throw new Error('Invalid JSON in "Select (JSON)"');
+						} catch {
+							throw new NodeOperationError(this.getNode(), 'Invalid JSON in "Select (JSON)"', { itemIndex: i });
 						}
 					}
 
-					let where: any[] = [];
+					let where: unknown[] = [];
 					if (whereJson) {
 						try {
 							where = JSON.parse(whereJson);
-						} catch (error) {
-							throw new Error('Invalid JSON in "Where (JSON)"');
+						} catch {
+							throw new NodeOperationError(this.getNode(), 'Invalid JSON in "Where (JSON)"', { itemIndex: i });
 						}
 					}
 
 					if (returnAll) {
-						let offset = 0;
-						const page = 500;
-						let hasMore = true;
-
-						while (hasMore) {
-							const r = await civicrmApiRequest.call(
-								this,
-								'POST',
-								`/civicrm/ajax/api4/${customEntity}/get`,
-								{ select, where, limit: page, offset },
-								runtimeBearerToken,
-								baseUrlOverride,
-							);
-
-							const vals = (r?.values ?? []) as IDataObject[];
-							for (const v of vals) {
-								out.push({ json: v, pairedItem: { item: i } });
-							}
-
-							if (vals.length < page) {
-								hasMore = false;
-							} else {
-								offset += page;
-							}
+						const rows = await fetchAllPages.call(
+							this,
+							`/civicrm/ajax/api4/${customEntity}/get`,
+							{ select, where },
+							{ runtimeBearerToken, baseUrlOverride, itemIndex: i },
+						);
+						for (const v of rows) {
+							out.push({ json: v, pairedItem: { item: i } });
 						}
 					} else {
 						const r = await civicrmApiRequest.call(
@@ -985,15 +565,20 @@ export class CiviCrm implements INodeType {
 				/* --------------------------------------------------------
 				   RAW API CALL (original behavior, unchanged)
 				-------------------------------------------------------- */
-				const action = this.getNodeParameter('customAction', i) as string;
+				const action = assertApiName(
+					this.getNode(),
+					'action',
+					this.getNodeParameter('customAction', i) as string,
+					i,
+				);
 				const paramsJson = this.getNodeParameter('customParamsJson', i, '') as string;
 
 				let params: Record<string, unknown> = {};
 				if (paramsJson) {
 					try {
 						params = JSON.parse(paramsJson);
-					} catch (error) {
-						throw new Error('Invalid JSON in "Params (JSON)"');
+					} catch {
+						throw new NodeOperationError(this.getNode(), 'Invalid JSON in "Params (JSON)"', { itemIndex: i });
 					}
 				}
 
@@ -1084,12 +669,12 @@ export class CiviCrm implements INodeType {
 				const returnAll = this.getNodeParameter('returnAll', i, false) as boolean;
 				const whereJson = this.getNodeParameter('whereJson', i, '') as string;
 
-				let where: any[] = [];
+				let where: unknown[] = [];
 				if (whereJson) {
 					try {
 						where = JSON.parse(whereJson);
-					} catch (error) {
-						throw new Error('Invalid JSON in whereJson');
+					} catch {
+						throw new NodeOperationError(this.getNode(), 'Invalid JSON in "Where (JSON)"', { itemIndex: i });
 					}
 				}
 
@@ -1126,33 +711,16 @@ export class CiviCrm implements INodeType {
 						};
 
 				if (returnAll) {
-					let offset = 0;
-					const page = 500;
-					let hasMore = true;
-
-					while (hasMore) {
-						const r = await civicrmApiRequest.call(
-							this,
-							'POST',
-							`/civicrm/ajax/api4/${entity}/get`,
-							{ ...params, limit: page, offset },
-							runtimeBearerToken,
-							baseUrlOverride,
-						);
-
-						const vals = r?.values ?? [];
-						for (const v of vals) {
-							out.push({
-								json: v,
-								pairedItem: { item: i },
-							});
-						}
-
-						if (vals.length < page) {
-							hasMore = false;
-						} else {
-							offset += page;
-						}
+					const rows = await fetchAllPages.call(this, `/civicrm/ajax/api4/${entity}/get`, params, {
+						runtimeBearerToken,
+						baseUrlOverride,
+						itemIndex: i,
+					});
+					for (const v of rows) {
+						out.push({
+							json: v,
+							pairedItem: { item: i },
+						});
 					}
 				} else {
 					const r = await civicrmApiRequest.call(
@@ -1324,7 +892,11 @@ export class CiviCrm implements INodeType {
 				/* birth_date */
 				if (key === 'birth_date' || key === 'birth') {
 					if (val !== '' && val !== null && val !== undefined) {
-						values.birth_date = normalizeBirthDate(String(val));
+						const birthDate = normalizeBirthDate(String(val));
+						if (birthDate === undefined) {
+							throw new NodeOperationError(this.getNode(), `Invalid birth_date: ${String(val)}`, { itemIndex: i });
+						}
+						values.birth_date = birthDate;
 					}
 					continue;
 				}
@@ -1352,8 +924,12 @@ export class CiviCrm implements INodeType {
 					runtimeBearerToken,
 					baseUrlOverride,
 				);
-				contactId = r?.values?.[0]?.id;
-				if (!contactId) throw new Error('Failed to create contact.');
+				contactId = r?.values?.[0]?.id as number | undefined;
+				if (!contactId) {
+					throw new NodeOperationError(this.getNode(), `Failed to create ${entity}: CiviCRM returned no ID.`, {
+						itemIndex: i,
+					});
+				}
 			} else {
 				await civicrmApiRequest.call(
 					this,
@@ -1586,13 +1162,14 @@ function convertValue(val: string): unknown {
 	try {
 		const j = JSON.parse(t);
 		if (typeof j === 'object') return j;
-	} catch (error) {
+	} catch {
 		// Not valid JSON, return original value
 	}
 	return val;
 }
 
-function normalizeBirthDate(input: string): string {
+/** Returns the date as YYYY-MM-DD, or undefined when it cannot be parsed. */
+function normalizeBirthDate(input: string): string | undefined {
 	if (!input) return input;
 	let v = input.trim();
 
@@ -1611,7 +1188,7 @@ function normalizeBirthDate(input: string): string {
 	}
 
 	const dt = new Date(v);
-	if (isNaN(dt.getTime())) throw new Error(`Invalid birth_date: ${input}`);
+	if (isNaN(dt.getTime())) return undefined;
 	return v;
 }
 

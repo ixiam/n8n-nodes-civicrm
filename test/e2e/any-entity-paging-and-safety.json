@@ -1,0 +1,122 @@
+{
+  "name": "E2E 4.0 - Any Entity: paging and safety",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "anyEntity",
+        "anyEntity": "Country",
+        "anySelect": [
+          "id"
+        ],
+        "anyReturnAll": true,
+        "operation": "get"
+      },
+      "name": "Countries (Return All)",
+      "type": "@ixiam/n8n-nodes-civicrm.civiCrm",
+      "typeVersion": 1,
+      "position": [
+        200,
+        0
+      ],
+      "credentials": {
+        "civiCrmApi": {
+          "name": "admin-key-xheader"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "anyEntity",
+        "anyEntity": "Contact",
+        "anyAction": "getDuplicates",
+        "anyParamsJson": "{\"dedupeRule\":\"IndividualSupervised\",\"values\":{\"first_name\":\"Nobody\",\"last_name\":\"E2E\"}}",
+        "operation": "other"
+      },
+      "name": "Get Duplicates",
+      "type": "@ixiam/n8n-nodes-civicrm.civiCrm",
+      "typeVersion": 1,
+      "position": [
+        400,
+        0
+      ],
+      "credentials": {
+        "civiCrmApi": {
+          "name": "admin-key-xheader"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "resource": "anyEntity",
+        "anyEntity": "Contact",
+        "anyAction": "replace",
+        "anyParamsJson": "{}",
+        "operation": "other"
+      },
+      "name": "Replace Without Advanced",
+      "type": "@ixiam/n8n-nodes-civicrm.civiCrm",
+      "typeVersion": 1,
+      "position": [
+        600,
+        0
+      ],
+      "credentials": {
+        "civiCrmApi": {
+          "name": "admin-key-xheader"
+        }
+      },
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Countries (Return All)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Countries (Return All)": {
+      "main": [
+        [
+          {
+            "node": "Get Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Replace Without Advanced",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
