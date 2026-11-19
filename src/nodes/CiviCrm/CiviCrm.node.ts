@@ -1561,8 +1561,30 @@ export class CiviCrm implements INodeType {
 				pairedItem: { item: i },
 			});
 			} catch (error) {
+				// Sanitized CiviCRM detail ({http_code, error_code, error_message,
+				// error_id, status...}) attached by buildCiviCrmApiError; never
+				// contains headers or credentials.
+				// (Duck-typed rather than `instanceof NodeApiError`, so it also works
+				// if n8n-workflow is loaded twice, e.g. a mounted dev checkout.)
+				const errorContext =
+					error && typeof error === 'object' && 'context' in error
+						? ((error as { context?: IDataObject }).context ?? undefined)
+						: undefined;
+				const civicrmError =
+					errorContext?.civicrm && typeof errorContext.civicrm === 'object'
+						? (errorContext.civicrm as IDataObject)
+						: undefined;
+				if (errorContext && errorContext.itemIndex === undefined) {
+					errorContext.itemIndex = i;
+				}
 				if (this.continueOnFail()) {
-					out.push({ json: { error: error instanceof Error ? error.message : String(error) }, pairedItem: { item: i } });
+					// `error` stays a string (unchanged contract); the CiviCRM detail
+					// is also in `civicrm_error` when CiviCRM sent one.
+					const json: IDataObject = {
+						error: error instanceof Error ? error.message : String(error),
+					};
+					if (civicrmError) json.civicrm_error = { ...civicrmError };
+					out.push({ json, pairedItem: { item: i } });
 					continue;
 				}
 				throw error;

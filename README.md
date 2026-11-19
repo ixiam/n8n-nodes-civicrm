@@ -157,6 +157,15 @@ Option 2: Regenerate API Key (CiviCRM)
 
 After entering credentials, click **Test credentials** to validate the connection.
 
+### **CiviCRM error details (v3.3.1+)**
+
+When CiviCRM rejects a call (HTTP 4xx/5xx), the node reports CiviCRM's own reason, not just n8n's generic text per status code.
+
+- **Error message**: n8n's usual status message, then ` | CiviCRM: ` and CiviCRM's `error_message`. Example: `The service was not able to process your request | CiviCRM: DB Error: already exists`. The prefix is unchanged, so checks such as `/^Forbidden/` keep working.
+- **Continue On Fail**: the output item keeps `error` (the message above, a string) and adds `civicrm_error` with `http_code`, `error_code`, `error_message`, `error_id`, `status` (and `db_error` or a short `body` excerpt when relevant). Network errors with no response keep the plain `{ "error": "..." }` item.
+- Only those fields are kept. Request headers, API keys, JWTs, SQL and backtraces never reach the error; anything credential-shaped in CiviCRM's text is redacted, and messages are capped at 1000 characters.
+- CiviCRM only sends the real reason to users with the **view debug output** permission. Other users get `Sorry an error occurred and your request was not completed. (Error ID: XXXX-XXXX-XXXX)`; `civicrm_error.error_id` holds that ID so the full error can be found in CiviCRM's log.
+
 ### **Base URL Override (v3.3.0+)**
 
 One credential can target many CiviCRM instances that share the same API key. Set the node's **Base URL Override** field, usually with an expression, and every request for that item goes to that URL instead of the credential's Base URL.
