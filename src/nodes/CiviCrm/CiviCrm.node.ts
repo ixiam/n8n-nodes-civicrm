@@ -18,6 +18,7 @@ import { resourceProp, operationProp, customApiOperationProp } from './descripti
 import { genericFields, upsertFields } from './descriptions/generic';
 import { anyEntityOperationProp, anyEntityProperties } from './anyEntity/description';
 import { executeAnyEntity } from './anyEntity/execute';
+import { civiErrorDetailsOf } from '../transport/Errors';
 import {
 	getAnyEntities,
 	getAnyEntityActions,
@@ -1138,7 +1139,12 @@ export class CiviCrm implements INodeType {
 			});
 			} catch (error) {
 				if (this.continueOnFail()) {
-					out.push({ json: { error: error instanceof Error ? error.message : String(error) }, pairedItem: { item: i } });
+					// `error` stays a string; `civicrm_error` adds the category and what CiviCRM answered
+					// (sanitized: no headers or credentials) when the failure came from a CiviCRM call.
+					const json: IDataObject = { error: error instanceof Error ? error.message : String(error) };
+					const civicrmError = civiErrorDetailsOf(error);
+					if (civicrmError) json.civicrm_error = { ...civicrmError };
+					out.push({ json, pairedItem: { item: i } });
 					continue;
 				}
 				throw error;

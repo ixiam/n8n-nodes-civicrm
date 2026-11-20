@@ -137,6 +137,19 @@ The **CiviCRM API** credential also works in n8n's HTTP Request node (*Authentic
 
 ---
 
+### **10. Errors a workflow can branch on**
+With **Continue On Fail**, a failed CiviCRM call returns `error` (the message) and `civicrm_error`:
+
+| Field | Content |
+|---|---|
+| `kind` | `permission_denied` (403), `auth_rejected` (401 and AuthX refusals), `rate_limited` (429), `unavailable` (502, 503, 504, network errors) or `civicrm_error` (anything else) |
+| `http_code` | HTTP status of CiviCRM's answer, as a string |
+| `error_message`, `error_code`, `status` | CiviCRM's APIv4 error fields |
+| `error_id` | Reference to look the error up in CiviCRM's log, when CiviCRM hides the detail from the user |
+| `db_error`, `body` | Short database error label, or a text excerpt of a non-JSON answer |
+
+Branch on `kind` or `http_code` instead of the message text, which may be reworded between versions. The detail is sanitized: no request headers, credentials, SQL or backtraces, and every text is length-capped. When the node stops instead, the same object is in the error's `context.civicrm`.
+
 ## Compatibility
 
 - **n8n:** tested with 2.41; requires n8n 1.0 or higher
