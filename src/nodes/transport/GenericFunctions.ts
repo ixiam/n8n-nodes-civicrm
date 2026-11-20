@@ -142,6 +142,8 @@ export async function civicrmApiRequest(
 	const idempotent = isReadOnlyPath(path);
 	const send = senderForContext(this);
 	const node = this.getNode();
+	// Redacted from every error text and detail.
+	const secrets: Array<string | undefined> = [cfg.apiKey, cfg.password, cfg.siteKey, credentialValue(cfg).split(' ')[1], runtimeBearerToken];
 
 	const call = async (authValue: string, flow: CiviAuthConfig['flow']) =>
 		(await sendWithRetry(send, { url, ...buildRequestParts(cfg, authValue, flow, params) }, { idempotent })) as CiviApiResponse;
@@ -150,7 +152,7 @@ export async function civicrmApiRequest(
 		try {
 			return await call(bearer(runtimeBearerToken), cfg.tokenFlow);
 		} catch (error) {
-			throw civiApiError(node, error, { url, credentialLabel: `runtime bearer token via ${flowLabel(cfg.tokenFlow)}` }, itemIndex);
+			throw civiApiError(node, error, { url, credentialLabel: `runtime bearer token via ${flowLabel(cfg.tokenFlow)}`, secrets }, itemIndex);
 		}
 	}
 
@@ -173,7 +175,7 @@ export async function civicrmApiRequest(
 				return await call(bearer(token), cfg.tokenFlow);
 			} catch (error) {
 				if (!isAuthRejection(error)) {
-					throw civiApiError(node, error, { url, credentialLabel: `JWT via ${flowLabel(cfg.tokenFlow)}` }, itemIndex);
+					throw civiApiError(node, error, { url, credentialLabel: `JWT via ${flowLabel(cfg.tokenFlow)}`, secrets: [...secrets, token] }, itemIndex);
 				}
 				const text = toHttpFailure(error).text || 'JWT rejected';
 				if (/not allowed/i.test(text)) {
@@ -190,7 +192,7 @@ export async function civicrmApiRequest(
 	try {
 		return await call(credentialValue(cfg), cfg.flow);
 	} catch (error) {
-		throw civiApiError(node, error, { url, credentialLabel: describeCredential(cfg) }, itemIndex);
+		throw civiApiError(node, error, { url, credentialLabel: describeCredential(cfg), secrets }, itemIndex);
 	}
 }
 

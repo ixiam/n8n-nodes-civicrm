@@ -23,10 +23,11 @@ Major release: every APIv4 REST authentication option AuthX offers to a server-s
 - **Any Entity** resource with its own operations (Get Many, Create, Create or Update, Update, Delete, Other Action), so it appears in n8n's node picker as "… any entity" actions. The entity dropdown and the Other Action list are discovered from the site (`Entity.get`, `getActions`); Get Many has field selection, filters, sort, limit and Return All; Create, Update and Create or Update use n8n's field mapper (typed fields and choice lists from `getFields`); Delete by ID or filters (never without one); other actions with Params (JSON). Discovery is cached for 15 minutes per site and identity, with at most two concurrent requests per site. Bulk actions (replace, mergeDuplicates, revert, …) and administrative entities (System, Setting, …) need *Show Advanced Entities and Actions*, enforced at run time too. Any Entity always runs with the credential it discovered with, so Base URL Override and Runtime Bearer Token are not offered for it.
 - Every request sends `X-Requested-With: XMLHttpRequest` (required by CiviCRM's CSRF check on the Authorization route).
 - The credential works in n8n's **HTTP Request** node (predefined credential type), on every route and with the site key. Selecting the "Custom API Call" option n8n adds to the operation lists stops with a pointer to that node instead of running.
+- **`civicrm_error` in the Continue On Fail item** (and in the thrown error's `context.civicrm`): `kind` (`permission_denied`, `auth_rejected`, `rate_limited`, `unavailable`, `civicrm_error`), `http_code` and CiviCRM's `error_message`, `error_code`, `error_id` and `status`, so workflows can branch on the category instead of the message text. `error_id` is taken from "(Error ID: …)" when CiviCRM hides the detail. Texts are redacted (credential values, Bearer/Basic tokens, JWT-shaped strings) and length-capped; SQL and backtraces are never copied. `error` stays a string. Ports the unreleased 3.3.1 work (#28) to the 4.0 error handling.
 - Retries: once after HTTP 429 (honouring `Retry-After`, any action: the apirestlog guard rejects before the API runs) and once after 502/503 for read actions only.
 - Return All (built-ins, Dynamic Search, Any Entity) drops from pages of 500 to 100 when the site caps rows per call.
 - CiviCRM HTML error pages are reduced to their message.
-- Tests: 164 (131 unit + 33 live integration against CiviCRM 6.4.2, opt-in via `CIVI_IT_*` variables, including the site-key guard with a contact that has no "authenticate with …" permission), plus n8n end-to-end workflows in `test/e2e/`. CI now runs lint, build and tests on pull requests; pre-release versions publish to the npm `next` tag.
+- Tests: 179 (146 unit + 33 live integration against CiviCRM 6.4.2, opt-in via `CIVI_IT_*` variables, including the site-key guard with a contact that has no "authenticate with …" permission), plus n8n end-to-end workflows in `test/e2e/`. CI now runs lint, build and tests on pull requests; pre-release versions publish to the npm `next` tag.
 
 ### Fixed
 - Credential Base URL placeholder pointed at `…/civicrm`, which produced `/civicrm/civicrm/ajax/api4` URLs; it now shows the site root and a trailing slash is tolerated.
@@ -34,6 +35,7 @@ Major release: every APIv4 REST authentication option AuthX offers to a server-s
 - `package.json` `main` pointed to a file the build never produces.
 
 ### Security
+- `NodeApiError` is built from a redacted plain object instead of the raw HTTP error, so the request configuration (which holds the authentication headers) is never attached to it.
 - The API key no longer appears in request parameters (the 3.x JWT contact lookup filtered on `api_key`, which request logs such as apirestlog stored in plain text).
 - Cache keys for JWTs, discovery and contact IDs are SHA-256 hashes of site and credential, never the raw key.
 
